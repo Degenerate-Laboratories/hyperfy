@@ -6,4 +6,13 @@ localstorage.json
 .notes/
 node_modules/
 build/
+
+# World files (generated on first run)
 /world*
+*.world
+*.sqlite
+*.db
+
+# Local guides
+.github-fork-guide.md
+.upstream-pr-protection.md
