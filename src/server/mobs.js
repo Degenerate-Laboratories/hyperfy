@@ -18,15 +18,13 @@ class Mobs {
       await fs.ensureDir(this.dir)
 
       // Copy over built-in mobs
-      const builtInMobsPath = path.join(rootDir, 'src/world/mobs')
-      if (await fs.pathExists(builtInMobsPath)) {
-        await fs.copy(builtInMobsPath, this.dir, { overwrite: false })
-      }
+      await fs.copy(path.join(rootDir, 'src/world/mobs'), this.dir)
 
-      // Validate manifest exists
+      // Check if manifest exists
       const manifestPath = path.join(this.dir, 'manifest.json')
       if (!await fs.pathExists(manifestPath)) {
-        throw new Error(`Manifest not found: ${manifestPath}`)
+        console.log('[mobs] No manifest found - no mobs to load')
+        return this
       }
 
       // Load and validate manifest
@@ -36,7 +34,8 @@ class Mobs {
       }
 
       if (manifest.mobs.length === 0) {
-        throw new Error('No mobs defined in manifest')
+        console.log('[mobs] No mobs defined in manifest')
+        return this
       }
 
       const blueprints = []

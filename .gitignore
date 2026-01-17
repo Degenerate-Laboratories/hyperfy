@@ -9,6 +9,7 @@ build/
 
 # World files (generated on first run)
 /world*
+/playground/
 *.world
 *.sqlite
 *.db
