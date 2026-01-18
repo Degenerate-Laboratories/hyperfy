@@ -84,7 +84,6 @@ export class World extends EventEmitter {
         'collections',   // No dependencies
         'apps',          // No dependencies
         'mobs',          // Depends on apps
-        'npcEngine',     // Depends on mobs, entities
         'anchors',       // Depends on collections
         'avatars',       // No dependencies
         'animation',     // No dependencies
@@ -93,6 +92,7 @@ export class World extends EventEmitter {
         'chat',          // No dependencies
         'blueprints',    // Depends on collections
         'entities',      // Depends on blueprints
+        'npcEngine',     // Depends on entities (MOVED HERE - after entities)
         'physics',       // Depends on entities
         'stage',         // Depends on entities
       ]
@@ -120,6 +120,17 @@ export class World extends EventEmitter {
             throw new Error('[collections] No collections loaded')
           }
           console.log(`[world] ✓ Collections ready (${collCount} collections)`)
+        }
+
+        if (systemName === 'npcEngine' && options.npcCharacters) {
+          const npcCount = system.registry?.size() || 0
+          if (npcCount === 0) {
+            throw new Error('[npcEngine] No NPC characters loaded')
+          }
+          if (!system.ready) {
+            throw new Error('[npcEngine] System not ready')
+          }
+          console.log(`[world] ✓ NPCEngine ready (${npcCount} characters)`)
         }
       }
 

@@ -91,19 +91,26 @@ export class ActionSystem {
    * @returns {Promise<void>} Resolves after optional duration
    */
   async chat(message, duration = 0) {
-    if (!this.world?.chat) {
-      console.warn('[ActionSystem] chat: world.chat not available')
-      return Promise.resolve()
+    // Try to show chat bubble on NPC entity first (v34 improvement)
+    if (this.npc?.mob?.chat) {
+      try {
+        this.npc.mob.chat(message)
+      } catch (error) {
+        console.warn('[ActionSystem] Failed to show chat bubble:', error)
+      }
     }
 
-    this.world.chat.add(
-      {
-        from: this.npc.getName(),
-        fromId: null,
-        body: message,
-      },
-      true
-    )
+    // Also add to world chat
+    if (this.world?.chat) {
+      this.world.chat.add(
+        {
+          from: this.npc.getName(),
+          fromId: null,
+          body: message,
+        },
+        true
+      )
+    }
 
     if (duration > 0) {
       return this.wait(duration)
@@ -147,6 +154,85 @@ export class ActionSystem {
     }
 
     this.degen.idle()
+    return Promise.resolve()
+  }
+
+  /**
+   * Stop movement and return to IDLE state
+   * @returns {Promise<void>} Resolves immediately
+   */
+  async stopMovement() {
+    if (!this.degen) {
+      return Promise.reject(new Error('Degen proxy not available'))
+    }
+
+    this.degen.idle()
+    return Promise.resolve()
+  }
+
+  /**
+   * Trigger emote animation
+   * @param {string} emoteName - e.g., 'wave', 'dance', 'sit'
+   * @param {number} [duration=3000] - How long the emote lasts in ms
+   * @returns {Promise<void>} Resolves after emote completes
+   */
+  async emote(emoteName, duration = 3000) {
+    if (!this.npc?.mob) {
+      console.warn('[ActionSystem] emote: mob not available')
+      return Promise.resolve()
+    }
+
+    // Set emote on entity
+    this.npc.mob.modify({ emote: emoteName })
+
+    // Wait for emote duration
+    await this.wait(duration)
+
+    // Clear emote
+    this.npc.mob.modify({ emote: null })
+
+    return Promise.resolve()
+  }
+
+  /**
+   * Run away from current position (180 degree turn + flee)
+   * This is an improved version that does a proper 180 turn before fleeing
+   * @param {number} [distance=15] - How far to run
+   * @param {number} [speed=6] - Movement speed
+   * @returns {Promise<void>} Resolves when flee completes
+   */
+  async runAway(distance = 15, speed = 6) {
+    if (!this.npc?.mob) {
+      return Promise.reject(new Error('Mob not available'))
+    }
+
+    const currentPos = this.npc.mob.data.position
+    const quaternion = this.npc.mob.data.quaternion || [0, 0, 0, 1]
+
+    // Calculate forward direction from quaternion
+    const [qx, qy, qz, qw] = quaternion
+    const forwardX = 2 * (qx * qz + qw * qy)
+    const forwardZ = 2 * (qy * qz - qw * qx)
+
+    // 180 degree turn = reverse the forward direction
+    const fleeX = -forwardX
+    const fleeZ = -forwardZ
+
+    // Normalize
+    const length = Math.sqrt(fleeX * fleeX + fleeZ * fleeZ) || 1
+    const normalizedX = fleeX / length
+    const normalizedZ = fleeZ / length
+
+    // Calculate flee position
+    const fleePos = [
+      currentPos[0] + normalizedX * distance,
+      currentPos[1],
+      currentPos[2] + normalizedZ * distance,
+    ]
+
+    // Move to flee position
+    await this.moveTo(fleePos, speed)
+
     return Promise.resolve()
   }
 

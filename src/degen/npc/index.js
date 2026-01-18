@@ -8,6 +8,7 @@
 // Core components
 export { NPCEngine } from './core/NPCEngine'
 export { NPC } from './core/NPC'
+export { NPCRegistry } from './core/NPCRegistry'
 export { EventBus } from './core/events/EventBus'
 
 // Adapters

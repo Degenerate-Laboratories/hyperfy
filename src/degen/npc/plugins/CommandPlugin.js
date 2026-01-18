@@ -34,6 +34,14 @@ export class CommandPlugin {
       pattern: /^follow\s*(me)?$/i,
       description: 'Make NPC follow the player',
       execute: async (npc, player) => {
+        // Try CommandHandler first (if available)
+        const commands = npc.getSystem('commands')
+        if (commands) {
+          await commands.handleCommand('follow', player.data.id, {})
+          return
+        }
+
+        // Fallback to direct ActionSystem
         const actions = npc.getSystem('actions')
         if (!actions) {
           console.warn('[CommandPlugin] NPC has no ActionSystem')
@@ -50,6 +58,14 @@ export class CommandPlugin {
       pattern: /^(stop|stay|wait)(\s+here)?$/i,
       description: 'Make NPC stop following',
       execute: async (npc, player) => {
+        // Try CommandHandler first (if available)
+        const commands = npc.getSystem('commands')
+        if (commands) {
+          await commands.handleCommand('stop', player.data.id, {})
+          return
+        }
+
+        // Fallback to direct ActionSystem
         const actions = npc.getSystem('actions')
         if (!actions) return
 
@@ -83,6 +99,14 @@ export class CommandPlugin {
       pattern: /^come\s+(here|to\s+me)$/i,
       description: 'Make NPC come to player',
       execute: async (npc, player) => {
+        // Try CommandHandler first (if available)
+        const commands = npc.getSystem('commands')
+        if (commands) {
+          await commands.handleCommand('come-here', player.data.id, {})
+          return
+        }
+
+        // Fallback to direct ActionSystem
         const actions = npc.getSystem('actions')
         if (!actions) return
 
@@ -95,6 +119,27 @@ export class CommandPlugin {
 
         await actions.moveTo(targetPos, 3)
         await actions.chat('Here I am!')
+      },
+    })
+
+    // Flee/Run away command
+    this.register('flee', {
+      pattern: /^(flee|run\s+away)$/i,
+      description: 'Make NPC flee from player',
+      execute: async (npc, player) => {
+        // Try CommandHandler first (if available)
+        const commands = npc.getSystem('commands')
+        if (commands) {
+          await commands.handleCommand('run-away', player.data.id, {})
+          return
+        }
+
+        // Fallback to direct ActionSystem
+        const actions = npc.getSystem('actions')
+        if (!actions) return
+
+        await actions.chat('Running away!')
+        await actions.flee(player.data.id, 6, 15)
       },
     })
 

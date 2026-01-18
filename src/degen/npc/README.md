@@ -1,16 +1,19 @@
-# NPC System
+# DegenQuest NPC System
 
-Hybrid NPC system for Hyperfy that combines v34's clean NPCEngine orchestration architecture with v35's native Mob/AIController infrastructure.
+Extensible NPC system with behavior files for DegenQuest v35. Combines clean orchestration architecture with native Mob/AIController infrastructure.
 
 ## Features
 
-- **Dual API Access**: High-level Systems API (v4-style) + Low-level degen proxy (v5-style)
-- **Server-Authoritative**: NPCs are server-controlled Mob entities with network sync
-- **Pluggable Systems**: ActionSystem, PerceptionSystem, and custom systems
-- **Promise-Based Actions**: Async action sequences for complex behaviors
-- **Event-Driven**: EventBus for lifecycle events and communication
-- **Player Commands**: Built-in command system with customizable commands
-- **Minimal Overhead**: ~10KB per NPC, 10Hz update rate
+- ✅ **Behavior File System** - Define custom NPCs with behavior.js files
+- ✅ **Lifecycle Hooks** - onSpawn, onUpdate, onInteract, onDespawn
+- ✅ **ActionSystem** - Movement (patrol, moveTo, follow, flee) and chat
+- ✅ **PerceptionSystem** - Awareness of nearby players and entities
+- ✅ **Command System** - Register custom player commands
+- ✅ **Event System** - Event-driven behavior patterns
+- ✅ **Client Sync** - Automatic registry synchronization
+- ✅ **Server-Authoritative** - NPCs are server-controlled Mob entities
+- ✅ **Promise-Based Actions** - Async action sequences for complex behaviors
+- ✅ **Minimal Overhead** - ~10KB per NPC, 10Hz update rate
 
 ## Architecture
 
@@ -29,96 +32,185 @@ NPCEngine (Orchestration Layer)
 
 ## Quick Start
 
-### 1. Basic NPC Spawning
+### 1. Create NPC Directory
 
-```javascript
-// Server-side only
-if (world.network.isServer) {
-  // Spawn a basic NPC
-  const npc = await world.npcEngine.spawn({
-    id: 'guard-001',
-    name: 'Guard Captain',
-    spawnPosition: [0, 0, 5],
-    health: 100,
-    maxHealth: 100,
-    systems: {
-      actions: { enabled: true },
-      perception: {
-        enabled: true,
-        radius: 10,
-      },
-    },
-  })
+```bash
+mkdir -p src/world/npcs/my-npc
+```
 
-  // Use the ActionSystem
-  const actions = npc.getSystem('actions')
-  await actions.chat('Hello, traveler!')
+### 2. Create character.json
+
+```json
+{
+  "id": "my-npc",
+  "name": "My NPC",
+  "title": "Custom NPC",
+  "model": "my-npc.vrm",
+  "level": 1,
+  "class": "Civilian",
+
+  "stats": {
+    "health": 100,
+    "maxHealth": 100,
+    "moveSpeed": 5.0,
+    "aggressive": false
+  },
+
+  "behavior": {
+    "script": "behavior.js",
+    "autoStart": true,
+    "config": {
+      "customSetting": "value"
+    }
+  },
+
+  "spawn": {
+    "defaultPosition": [0, 1, 0]
+  },
+
+  "systems": {
+    "actions": { "enabled": true },
+    "perception": {
+      "enabled": true,
+      "radius": 10,
+      "detectPlayers": true
+    }
+  }
 }
 ```
 
-### 2. Action Sequences
+### 3. Create behavior.js
 
 ```javascript
-const actions = npc.getSystem('actions')
+export default {
+  async onSpawn({ npc, world, config, events }) {
+    console.log(`${npc.getName()} spawned!`)
 
-// Chain actions with promises
-await actions.chat('Watch me move!')
-await actions.moveTo([10, 0, 5], 2)
-await actions.chat('I have arrived!')
-await actions.wait(2000)
-await actions.chat('Now I will patrol.')
-
-// Patrol between waypoints
-await actions.patrol(
-  [
-    [0, 0, 0],
-    [10, 0, 0],
-    [10, 0, 10],
-    [0, 0, 10],
-  ],
-  2, // speed
-  true // loop
-)
-```
-
-### 3. Perception and Reactions
-
-```javascript
-const perception = npc.getSystem('perception')
-const actions = npc.getSystem('actions')
-
-// Check for nearby players
-setInterval(async () => {
-  const nearestPlayer = perception.getNearestPlayer()
-
-  if (nearestPlayer && nearestPlayer.distance < 5) {
-    await actions.chat('Welcome, traveler!')
-  }
-}, 3000)
-```
-
-### 4. Player Commands
-
-NPCs respond to chat commands automatically:
-
-```javascript
-// Built-in commands:
-// - "hello" / "hi" → Greet NPC
-// - "follow me" → NPC follows player
-// - "stop" / "stay" → NPC stops following
-// - "come here" → NPC comes to player
-// - "status" / "health" → NPC reports status
-
-// Register custom command
-world.npcEngine.registerCommand('dance', {
-  pattern: /^dance$/i,
-  description: 'Make NPC dance',
-  execute: async (npc, player) => {
     const actions = npc.getSystem('actions')
-    await actions.chat('Time to dance!')
-    // ... dance logic
+    await actions.chat('Hello world!')
   },
-})
+
+  async onInteract(player, { npc, world, config }) {
+    const actions = npc.getSystem('actions')
+    await actions.chat(`Hello, ${player.data.name}!`)
+  },
+
+  onDespawn({ npc }) {
+    console.log(`${npc.getName()} despawning`)
+  }
+}
+```
+
+### 4. Add to Manifest
+
+Edit `src/world/npcs/npcs.json`:
+
+```json
+{
+  "name": "NPCs",
+  "npcs": ["my-npc"]
+}
+```
+
+### 5. Test
+
+1. Start server
+2. Open NPC panel in client UI
+3. Click your NPC to spawn
+4. Interact with it!
+
+## Documentation
+
+- **[API Reference](./docs/API.md)** - Complete API documentation for behavior development
+- **[Tutorial](./docs/TUTORIAL.md)** - Step-by-step NPC creation guide
+- **[README](./README.md)** - This file (overview and architecture)
+
+## Examples
+
+### Guard with Patrol
+
+See: `/src/world/npcs/guard/`
+
+Features:
+- Patrols waypoints in a loop
+- Greets nearby players (with cooldown)
+- Responds to player interactions
+- Custom dialog on interact
+
+**Key Behavior:**
+```javascript
+export default {
+  async onSpawn({ npc, world, config }) {
+    const actions = npc.getSystem('actions')
+    await actions.patrol(config.patrolWaypoints, 2, true)
+
+    // Periodic player detection
+    setInterval(() => {
+      const perception = npc.getSystem('perception')
+      const nearest = perception.getNearestPlayer()
+      if (nearest && nearest.distance < 5) {
+        this.greetPlayer(nearest.id, { npc, actions, config })
+      }
+    }, 2000)
+  }
+}
+```
+
+### Merchant with Shop
+
+See: `/src/world/npcs/merchant/`
+
+Features:
+- Stationary shopkeeper
+- Registers "shop" command
+- Shows inventory on command
+- Interactive greetings
+
+**Key Behavior:**
+```javascript
+export default {
+  async onSpawn({ npc, world, config }) {
+    // Register shop command
+    world.npcEngine.registerCommand('shop', {
+      pattern: /^(shop|buy|sell|trade)$/i,
+      async execute(targetNpc, player) {
+        const actions = npc.getSystem('actions')
+        const items = config.shopInventory
+          .map(item => `${item.name}: ${item.price}g`)
+          .join(' | ')
+        await actions.chat(`My wares: ${items}`)
+      }
+    })
+  }
+}
+```
+
+## Behavior Lifecycle
+
+Every behavior.js file exports lifecycle hooks:
+
+```javascript
+export default {
+  // Called once when NPC spawns (required)
+  async onSpawn({ npc, world, config, events }) {
+    // Initialize behavior, start patrols, register commands
+  },
+
+  // Called every frame (optional, use sparingly)
+  onUpdate(delta, { npc, world, config }) {
+    // Frame-based logic (avoid heavy computation)
+  },
+
+  // Called when player interacts (optional)
+  async onInteract(player, { npc, world, config }) {
+    // Handle player clicking/targeting NPC
+  },
+
+  // Called before NPC despawns (optional)
+  onDespawn({ npc, world, config }) {
+    // Cleanup intervals, remove event listeners
+  }
+}
 ```
 
 ## API Reference
@@ -233,20 +325,106 @@ Player command system.
 }
 ```
 
-## Examples
+## Character.json Schema
 
-See `examples/npc-demo.js` for comprehensive demonstrations of:
-- Basic NPC spawning
-- Action sequences
-- Perception and reactions
-- Player commands
-- Custom commands
-- NPC lifecycle management
-- Multiple NPC interactions
+### Required Fields
 
-See `src/degen/npc/examples/` for:
-- `guard.js` - Patrolling guard with greetings
-- `merchant.js` - Stationary merchant with custom commands
+```json
+{
+  "id": "unique-id",
+  "name": "Display Name",
+  "model": "filename.vrm",
+  "stats": {
+    "health": 100,
+    "maxHealth": 100,
+    "moveSpeed": 5.0,
+    "aggressive": false
+  }
+}
+```
+
+### Behavior Configuration
+
+```json
+{
+  "behavior": {
+    "script": "behavior.js",
+    "autoStart": true,
+    "config": {
+      "patrolWaypoints": [[0,0,5], [10,0,5]],
+      "greetDistance": 5,
+      "greetCooldown": 30000,
+      "customData": "anything you need"
+    }
+  }
+}
+```
+
+### Spawn Configuration
+
+```json
+{
+  "spawn": {
+    "defaultPosition": [0, 1, 5],
+    "defaultQuaternion": [0, 0, 0, 1],
+    "autoSpawn": false,
+    "unique": true
+  }
+}
+```
+
+### Systems Configuration
+
+```json
+{
+  "systems": {
+    "actions": { "enabled": true },
+    "perception": {
+      "enabled": true,
+      "radius": 20,
+      "updateRate": 0.5,
+      "detectPlayers": true
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Always check system availability**
+   ```javascript
+   const actions = npc.getSystem('actions')
+   if (!actions) return // Safety check
+   ```
+
+2. **Clean up resources in onDespawn**
+   ```javascript
+   onDespawn({ npc }) {
+     if (this.interval) clearInterval(this.interval)
+     this.dataStructures.clear()
+   }
+   ```
+
+3. **Check if NPC is alive**
+   ```javascript
+   if (!npc.alive()) return
+   ```
+
+4. **Use async/await for actions**
+   ```javascript
+   await actions.chat('First message')
+   await actions.wait(1000)
+   await actions.chat('Second message')
+   ```
+
+5. **Handle errors gracefully**
+   ```javascript
+   try {
+     await actions.moveTo(target)
+   } catch (error) {
+     console.error('Movement failed:', error)
+   }
+   ```
 
 ## Integration with World
 
@@ -269,14 +447,60 @@ world.npcEngine.getNPC(id)
 - **Update Rate**: 10Hz (matches AIController)
 - **Network**: <1KB/s per NPC
 
+## Directory Structure
+
+```
+/src/
+├── degen/npc/              # Core NPC engine
+│   ├── core/
+│   │   ├── NPCEngine.js
+│   │   └── NPCRegistry.js
+│   ├── systems/
+│   │   ├── ActionSystem.js
+│   │   └── PerceptionSystem.js
+│   ├── adapters/
+│   │   └── HyperfyAdapter.js
+│   ├── plugins/
+│   │   └── CommandPlugin.js
+│   ├── docs/               # Documentation
+│   │   ├── README.md       # This file
+│   │   ├── API.md          # API Reference
+│   │   └── TUTORIAL.md     # Tutorial
+│   └── README.md
+│
+├── world/npcs/             # NPC definitions
+│   ├── npcs.json          # Manifest
+│   ├── guard/
+│   │   ├── character.json
+│   │   ├── behavior.js
+│   │   └── guard.vrm
+│   └── merchant/
+│       ├── character.json
+│       ├── behavior.js
+│       └── merchant.vrm
+│
+├── core/systems/
+│   └── NPCEngineSystem.js  # World system integration
+│
+└── server/
+    ├── npcs.js            # Server-side NPC loader
+    └── index.js           # Bootstrap
+```
+
 ## Future Enhancements
 
-- Voice synthesis plugin
-- Behavior trees
-- Goal-oriented action planning (GOAP)
+Planned features:
+- Quest system integration
+- Dialog tree system
+- Shop/trading implementation with inventory
+- Combat mechanics
+- Party/companion system
+- Reputation/faction system
 - NPC-to-NPC interactions
 - Persistent NPC state
-- Quest system integration
+- Behavior trees
+- Goal-oriented action planning (GOAP)
+- Voice synthesis plugin
 
 ## License
 

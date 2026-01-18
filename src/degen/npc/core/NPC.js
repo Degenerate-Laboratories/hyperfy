@@ -4,6 +4,16 @@
  * Wraps a Mob entity and AIController and manages attached systems.
  * Provides a clean interface for NPC behavior and state management.
  */
+
+// NPC State Constants
+export const NPCState = {
+  IDLE: 'IDLE',
+  FOLLOWING: 'FOLLOWING',
+  WAITING: 'WAITING',
+  MOVING: 'MOVING',
+  COMBAT: 'COMBAT'
+}
+
 export class NPC {
   /**
    * Create NPC container
@@ -19,6 +29,7 @@ export class NPC {
     this.aiController = aiController
     this.systems = new Map()
     this.isAlive = true
+    this.state = NPCState.IDLE // Current NPC state
 
     // Bind to mob events
     this._bindMobEvents()
@@ -146,6 +157,30 @@ export class NPC {
     }
 
     // Note: Mob entity is destroyed by the adapter, not here
+  }
+
+  /**
+   * Set NPC state
+   * @param {string} newState - New state from NPCState constants
+   */
+  setState(newState) {
+    if (!Object.values(NPCState).includes(newState)) {
+      console.warn(`[NPC] ${this.id} invalid state: ${newState}`)
+      return
+    }
+
+    const oldState = this.state
+    this.state = newState
+
+    console.log(`[NPC] ${this.id} state changed: ${oldState} → ${newState}`)
+  }
+
+  /**
+   * Get current NPC state
+   * @returns {string} Current state
+   */
+  getState() {
+    return this.state
   }
 
   /**
