@@ -90,6 +90,7 @@ export class World extends EventEmitter {
         'animation',     // No dependencies
         'events',        // No dependencies
         'scripts',       // Depends on events
+        'sound',         // Depends on events, apps, entities, network
         'chat',          // No dependencies
         'blueprints',    // Depends on collections
         'entities',      // Depends on blueprints
@@ -120,6 +121,13 @@ export class World extends EventEmitter {
             throw new Error('[collections] No collections loaded')
           }
           console.log(`[world] ✓ Collections ready (${collCount} collections)`)
+        }
+
+        if (systemName === 'sound' && this[systemName]) {
+          if (!this[systemName].isReady) {
+            throw new Error('[sound] System initialization failed')
+          }
+          console.log('[world] ✓ Sound system ready')
         }
       }
 

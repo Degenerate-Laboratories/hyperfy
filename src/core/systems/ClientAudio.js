@@ -47,6 +47,10 @@ export class ClientAudio extends System {
     if (!this.unlocked) {
       this.setupUnlockListener()
     }
+
+    // Sound pool management (entity -> [audio nodes])
+    this.soundPool = new Map()
+    this.maxPoolSize = 3 // Max 3 simultaneous sounds per entity
   }
 
   ready(fn) {
@@ -98,6 +102,24 @@ export class ClientAudio extends System {
 
   async init() {
     this.world.prefs.on('change', this.onPrefsChange)
+
+    // Fail-fast validation
+    if (!this.ctx) {
+      throw new Error('[audio] AudioContext not available')
+    }
+    if (!this.groupGains.sfx) {
+      throw new Error('[audio] SFX group not initialized')
+    }
+    if (!this.listener) {
+      throw new Error('[audio] Audio listener not configured')
+    }
+
+    // Register network event handler for sound playback
+    if (this.world.network) {
+      this.world.network.on('playSound', this.handlePlaySound)
+    }
+
+    console.log('[audio] Client audio system initialized')
   }
 
   start() {
@@ -139,7 +161,190 @@ export class ClientAudio extends System {
     }
   }
 
+  /**
+   * Handle network playSound events
+   * Creates spatial or non-spatial audio based on event data
+   *
+   * @param {Object} data - { entityId, sound, volume, spatial, position }
+   */
+  handlePlaySound = async data => {
+    const { entityId, sound, volume, spatial, position } = data
+
+    // Get entity (if it exists locally)
+    const entity = this.world.entities?.get(entityId)
+    if (!entity) {
+      console.warn(`[audio] Entity ${entityId} not found for sound playback`)
+      return
+    }
+
+    // Resolve sound URL (check mob soundMap first, then world.settings.sounds)
+    const soundUrl = this.resolveSoundUrl(entity, sound)
+    if (!soundUrl) {
+      console.warn(`[audio] Sound '${sound}' not found for entity ${entityId}`)
+      return
+    }
+
+    // Create and play audio node
+    this.playSpatialSound(entityId, soundUrl, volume, spatial, position)
+  }
+
+  /**
+   * Resolve sound URL from entity blueprint or world settings
+   *
+   * Priority:
+   * 1. Check entity.blueprint.props.soundMap (embedded mob sounds)
+   * 2. Check world.settings.sounds (hosted character sounds)
+   * 3. Return null if not found
+   *
+   * @param {Object} entity - Entity object
+   * @param {string} soundName - Name of sound to resolve
+   * @returns {string|null} Resolved URL or null
+   */
+  resolveSoundUrl(entity, soundName) {
+    // 1. Check mob blueprint soundMap (embedded sounds with asset:// URLs)
+    const soundMap = entity.blueprint?.props?.soundMap
+    if (soundMap && soundMap[soundName]) {
+      return this.world.resolveURL(soundMap[soundName]) // asset:// -> https://
+    }
+
+    // 2. Check world settings (hosted sounds for characters)
+    const worldSounds = this.world.settings?.sounds
+    if (worldSounds && worldSounds[soundName]) {
+      return this.world.resolveURL(worldSounds[soundName])
+    }
+
+    // 3. Not found
+    return null
+  }
+
+  /**
+   * Play a spatial sound with pooling
+   * Manages audio node pool per entity (max 3 simultaneous sounds)
+   *
+   * @param {string} entityId - Entity ID
+   * @param {string} soundUrl - Resolved sound URL
+   * @param {number} volume - Volume (0-1)
+   * @param {boolean} spatial - Use spatial audio
+   * @param {Object} position - { x, y, z }
+   */
+  async playSpatialSound(entityId, soundUrl, volume = 1.0, spatial = true, position = { x: 0, y: 0, z: 0 }) {
+    // Wait for audio unlock (user interaction required by browsers)
+    if (!this.unlocked) {
+      console.log('[audio] Waiting for user interaction to unlock audio...')
+      return
+    }
+
+    try {
+      // Get or create pool for this entity
+      if (!this.soundPool.has(entityId)) {
+        this.soundPool.set(entityId, [])
+      }
+      const pool = this.soundPool.get(entityId)
+
+      // If pool is full, stop oldest sound (FIFO eviction)
+      if (pool.length >= this.maxPoolSize) {
+        const oldestNode = pool.shift()
+        this.stopAudioNode(oldestNode)
+      }
+
+      // Load audio buffer
+      const loader = this.world.loader
+      let buffer
+      try {
+        buffer = loader.get('audio', soundUrl)
+        if (!buffer) {
+          buffer = await loader.load('audio', soundUrl)
+        }
+      } catch (err) {
+        console.error(`[audio] Failed to load sound: ${soundUrl}`, err)
+        return
+      }
+
+      // Create audio node
+      const source = this.ctx.createBufferSource()
+      source.buffer = buffer
+
+      const gainNode = this.ctx.createGain()
+      gainNode.gain.value = volume
+
+      let pannerNode = null
+      if (spatial) {
+        // Create spatial audio with panner
+        pannerNode = this.ctx.createPanner()
+        pannerNode.panningModel = 'HRTF'
+        pannerNode.distanceModel = 'inverse'
+        pannerNode.refDistance = 1
+        pannerNode.maxDistance = 40
+        pannerNode.rolloffFactor = 3
+
+        // Set position
+        if (pannerNode.positionX) {
+          const endTime = this.ctx.currentTime + this.lastDelta
+          pannerNode.positionX.linearRampToValueAtTime(position.x, endTime)
+          pannerNode.positionY.linearRampToValueAtTime(position.y, endTime)
+          pannerNode.positionZ.linearRampToValueAtTime(position.z, endTime)
+        } else {
+          pannerNode.setPosition(position.x, position.y, position.z)
+        }
+
+        source.connect(gainNode)
+        gainNode.connect(pannerNode)
+        pannerNode.connect(this.groupGains.sfx)
+      } else {
+        // Non-spatial audio
+        source.connect(gainNode)
+        gainNode.connect(this.groupGains.sfx)
+      }
+
+      // Track node in pool
+      const audioNode = { source, gainNode, pannerNode, entityId }
+      pool.push(audioNode)
+
+      // Auto-cleanup when sound finishes
+      source.onended = () => {
+        this.stopAudioNode(audioNode)
+        const index = pool.indexOf(audioNode)
+        if (index !== -1) {
+          pool.splice(index, 1)
+        }
+      }
+
+      // Start playback
+      source.start(0)
+    } catch (err) {
+      console.error('[audio] Error playing sound:', err)
+    }
+  }
+
+  /**
+   * Stop and disconnect an audio node
+   * @param {Object} audioNode - { source, gainNode, pannerNode }
+   */
+  stopAudioNode(audioNode) {
+    try {
+      if (audioNode.source) {
+        audioNode.source.onended = null
+        audioNode.source.stop()
+      }
+      if (audioNode.gainNode) {
+        audioNode.gainNode.disconnect()
+      }
+      if (audioNode.pannerNode) {
+        audioNode.pannerNode.disconnect()
+      }
+    } catch (err) {
+      // Already stopped/disconnected, ignore
+    }
+  }
+
   destroy() {
+    // Clean up sound pool
+    this.soundPool.forEach(pool => {
+      pool.forEach(audioNode => this.stopAudioNode(audioNode))
+    })
+    this.soundPool.clear()
+
+    // Clean up existing audio system
     this.groupGains.music.disconnect()
     this.groupGains.sfx.disconnect()
     this.groupGains.voice.disconnect()

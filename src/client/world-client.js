@@ -6,6 +6,7 @@ import { css } from '@firebolt-dev/css'
 
 import { createClientWorld } from '../core/createClientWorld'
 import { CoreUI } from './components/CoreUI'
+import { initPlayerFootsteps } from '../world/player-footsteps'
 
 export { System } from '../core/systems/System'
 
@@ -79,6 +80,14 @@ export function Client({ wsUrl, onSetup }) {
 
         console.log('[client] ✓ All data loaded')
         console.log(`[client] ✓ ${mobCount} mob(s) ready`)
+
+        // Initialize player footstep system
+        try {
+          initPlayerFootsteps(world)
+          console.log('[client] ✓ Player footsteps initialized')
+        } catch (err) {
+          console.error('[client] Failed to initialize footsteps:', err)
+        }
 
         setReady(true)
 
