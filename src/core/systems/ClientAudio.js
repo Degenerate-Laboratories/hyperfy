@@ -122,6 +122,75 @@ export class ClientAudio extends System {
     console.log('[audio] Client audio system initialized')
   }
 
+  /**
+   * Validate all mob sound assets are accessible
+   * Throws if any required sounds are missing
+   *
+   * This is a fail-fast validation that prevents the game from starting
+   * if mob assets are missing (usually due to asset cleaner deleting them)
+   */
+  async validateMobAssets() {
+    console.log('[audio] Validating mob sound assets...')
+
+    const errors = []
+    const blueprints = this.world.mobs?.getMobBlueprints?.() || []
+
+    if (blueprints.length === 0) {
+      console.log('[audio] No mobs to validate')
+      return
+    }
+
+    for (const blueprint of blueprints) {
+      const soundMap = blueprint.props?.soundMap || {}
+      const soundCount = Object.keys(soundMap).length
+
+      if (soundCount === 0) {
+        console.warn(`[audio] Mob "${blueprint.name}" has no sounds configured`)
+        continue
+      }
+
+      console.log(`[audio]   → Validating ${soundCount} sounds for "${blueprint.name}"`)
+
+      for (const [soundName, soundUrl] of Object.entries(soundMap)) {
+        if (!soundUrl || !soundUrl.startsWith('asset://')) {
+          errors.push(`  → Mob "${blueprint.name}" sound "${soundName}": invalid URL "${soundUrl}"`)
+          continue
+        }
+
+        try {
+          const resolved = this.world.resolveURL(soundUrl)
+          const response = await fetch(resolved, { method: 'HEAD' })
+
+          if (!response.ok) {
+            errors.push(`  → Mob "${blueprint.name}" sound "${soundName}": HTTP ${response.status} for ${soundUrl}`)
+          } else {
+            console.log(`[audio]     ✓ ${soundName}`)
+          }
+        } catch (err) {
+          errors.push(`  → Mob "${blueprint.name}" sound "${soundName}": unreachable (${err.message})`)
+        }
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new Error(
+        `[audio] 🚨 FATAL: Mob sound assets missing or inaccessible\n\n` +
+        `${errors.join('\n')}\n\n` +
+        `The game cannot start with missing mob assets.\n` +
+        `This usually means:\n` +
+        `  1. Server asset cleaner deleted the files (check server logs for [clean])\n` +
+        `  2. Mob .hyp file was not properly extracted on server startup\n` +
+        `  3. Assets were uploaded to wrong directory\n\n` +
+        `ACTION REQUIRED:\n` +
+        `  1. Restart the Hyperfy server to re-extract mob assets\n` +
+        `  2. Check server logs for [mobs] asset extraction messages\n` +
+        `  3. Verify files exist in playground/assets/ directory\n`
+      )
+    }
+
+    console.log(`[audio] ✅ All mob sound assets validated`)
+  }
+
   start() {
     // ...
   }

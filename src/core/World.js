@@ -141,6 +141,14 @@ export class World extends EventEmitter {
         }
       }
 
+      // Validate mob assets after all systems initialized (client-only)
+      if (options.isClient && this.audio && this.mobs) {
+        const mobCount = this.mobs.getMobBlueprints?.()?.length || 0
+        if (mobCount > 0) {
+          await this.audio.validateMobAssets()
+        }
+      }
+
       console.log('[world] ✓ All systems initialized')
       this.ready = true
       this.emit('ready')

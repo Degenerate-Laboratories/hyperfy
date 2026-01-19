@@ -7,6 +7,34 @@ class Cleaner {
     // ...
   }
 
+  /**
+   * Recursively extract all asset:// URLs from an object
+   * Handles nested objects, arrays, and string values
+   *
+   * @param {*} obj - Object to scan
+   * @param {Set<string>} urls - Set to accumulate URLs (without asset:// prefix)
+   * @returns {Set<string>} Set of asset hashes
+   */
+  extractAssetURLs(obj, urls = new Set()) {
+    if (!obj) return urls
+
+    if (typeof obj === 'string') {
+      if (obj.startsWith('asset://')) {
+        urls.add(obj.replace('asset://', ''))
+      }
+    } else if (Array.isArray(obj)) {
+      for (const item of obj) {
+        this.extractAssetURLs(item, urls)
+      }
+    } else if (typeof obj === 'object') {
+      for (const key in obj) {
+        this.extractAssetURLs(obj[key], urls)
+      }
+    }
+
+    return urls
+  }
+
   async init({ db }) {
     const clean = process.env.CLEAN === 'true' || process.env.CLEAN === 'dryrun'
     if (!clean) return console.log('[clean] skipped')
@@ -68,26 +96,14 @@ class Cleaner {
       blueprints.add(blueprint)
     }
     // keep all assets associated with remaining active blueprints
+    // Extract ALL asset:// URLs recursively from entire blueprint
+    let totalBlueprintAssets = 0
     for (const blueprint of blueprints) {
-      // blueprint model
-      if (blueprint.model && blueprint.model.startsWith('asset://')) {
-        assetsToKeep.add(blueprint.model.replace('asset://', ''))
-      }
-      // blueprint script
-      if (blueprint.script && blueprint.script.startsWith('asset://')) {
-        assetsToKeep.add(blueprint.script.replace('asset://', ''))
-      }
-      // blueprint image (metadata)
-      if (blueprint.image?.url && blueprint.image.url.startsWith('asset://')) {
-        assetsToKeep.add(blueprint.image.url.replace('asset://', ''))
-      }
-      // assets from file props
-      for (const key in blueprint.props) {
-        const url = blueprint.props[key]?.url
-        if (!url) continue
-        assetsToKeep.add(url.replace('asset://', ''))
-      }
+      const blueprintAssets = this.extractAssetURLs(blueprint)
+      blueprintAssets.forEach(asset => assetsToKeep.add(asset))
+      totalBlueprintAssets += blueprintAssets.size
     }
+    console.log(`[clean] Protected ${totalBlueprintAssets} assets from ${blueprints.size} blueprint(s)`)
     // get a list of assets to delete
     const assetsToDelete = new Set()
     for (const asset of allAssets) {
