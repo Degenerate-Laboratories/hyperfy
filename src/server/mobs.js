@@ -38,6 +38,7 @@ class Mobs {
   async init({ rootDir, worldDir }) {
     console.log('[mobs] initializing')
     this.dir = path.join(worldDir, '/mobs')
+    this.worldDir = worldDir // Store for icon validation
 
     try {
       // Ensure mobs directory exists
@@ -125,9 +126,17 @@ class Mobs {
 
         console.log(`[mobs]   → Found ${mob.assets.length} assets to extract`)
 
+        // Debug: Log blueprint icon configuration
+        if (mob.blueprint.image) {
+          console.log(`[mobs]   → Blueprint icon configured: ${mob.blueprint.image.url}`)
+        } else {
+          console.warn(`[mobs]   ⚠️  No icon configured in blueprint (blueprint.image is missing)`)
+        }
+
         // Upload and validate each asset with fail-fast
         let uploadedCount = 0
         const assetsByType = {}
+        let iconAssetExtracted = false
 
         for (let i = 0; i < mob.assets.length; i++) {
           const asset = mob.assets[i]
@@ -149,10 +158,16 @@ class Mobs {
             // Track asset types
             assetsByType[asset.type] = (assetsByType[asset.type] || 0) + 1
 
-            if (result.skipped) {
-              console.log(`[mobs]   → [${assetNum}] ${asset.type}: ${result.filename} (cached)`)
+            // Track if icon was extracted
+            if (asset.type === 'image' && mob.blueprint.image && asset.url === mob.blueprint.image.url) {
+              iconAssetExtracted = true
+              console.log(`[mobs]   → [${assetNum}] ${asset.type}: ${result.filename} (ICON) ${result.skipped ? '(cached)' : '(extracted)'}`)
             } else {
-              console.log(`[mobs]   → [${assetNum}] ${asset.type}: ${result.filename} (extracted)`)
+              if (result.skipped) {
+                console.log(`[mobs]   → [${assetNum}] ${asset.type}: ${result.filename} (cached)`)
+              } else {
+                console.log(`[mobs]   → [${assetNum}] ${asset.type}: ${result.filename} (extracted)`)
+              }
             }
           } catch (error) {
             throw new Error(
@@ -190,6 +205,37 @@ class Mobs {
             `  → Found asset types: ${Object.keys(assetsByType).join(', ')}\n` +
             `  → ACTION REQUIRED: Remove "${mobFilename}" from manifest.json - no script found`
           )
+        }
+
+        // Validate icon if blueprint specifies one
+        if (mob.blueprint.image) {
+          if (!iconAssetExtracted) {
+            throw new Error(
+              `Icon configured but not extracted in ${mobFilename}\n` +
+              `  → Blueprint icon: ${mob.blueprint.image.url}\n` +
+              `  → Extracted asset types: ${Object.keys(assetsByType).join(', ')}\n` +
+              `  → The .hyp file may be corrupted or the icon asset is missing\n` +
+              `  → ACTION REQUIRED: Rebuild ${mobFilename} with icon included`
+            )
+          }
+
+          // Verify icon file exists on disk
+          const iconFilename = mob.blueprint.image.url.replace('asset://', '')
+          const iconPath = path.join(this.worldDir, 'assets', iconFilename)
+
+          if (!await fs.pathExists(iconPath)) {
+            throw new Error(
+              `Icon file missing after extraction in ${mobFilename}\n` +
+              `  → Expected path: ${iconPath}\n` +
+              `  → Blueprint icon: ${mob.blueprint.image.url}\n` +
+              `  → The icon was marked as extracted but file doesn't exist\n` +
+              `  → ACTION REQUIRED: Check assets directory permissions or rebuild ${mobFilename}`
+            )
+          }
+
+          console.log(`[mobs]   ✓ Icon validated: ${iconFilename} exists at ${iconPath}`)
+        } else {
+          console.warn(`[mobs]   ⚠️  No icon configured for "${mob.blueprint.name}" - will use default placeholder`)
         }
 
         blueprints.push(mob.blueprint)
