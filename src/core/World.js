@@ -5,7 +5,6 @@ import { Settings } from './systems/Settings'
 import { Collections } from './systems/Collections'
 import { Apps } from './systems/Apps'
 import { Mobs } from './systems/Mobs'
-import { NPCEngineSystem } from './systems/NPCEngineSystem'
 import { Anchors } from './systems/Anchors'
 import { Avatars } from './systems/Avatars'
 import { Animation } from './systems/Animation'
@@ -42,7 +41,6 @@ export class World extends EventEmitter {
     this.register('collections', Collections)
     this.register('apps', Apps)
     this.register('mobs', Mobs)
-    this.register('npcEngine', NPCEngineSystem)
     this.register('anchors', Anchors)
     this.register('avatars', Avatars)
     this.register('animation', Animation)
@@ -84,7 +82,6 @@ export class World extends EventEmitter {
         'collections',   // No dependencies
         'apps',          // No dependencies
         'mobs',          // Depends on apps
-        'npcEngine',     // Depends on mobs, entities
         'anchors',       // Depends on collections
         'avatars',       // No dependencies
         'animation',     // No dependencies
