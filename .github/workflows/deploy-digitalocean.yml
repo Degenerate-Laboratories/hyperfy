@@ -1,25 +1,16 @@
-name: Build and Deploy Hyperfy Playground
-
-permissions:
-  packages: write
-  contents: read
+name: Deploy to DigitalOcean
 
 on:
   push:
     branches:
-      - 'main'
-      - 'dev'
-      - 'solana-v2'
-      - 'ai'
+      - main
+      - dev
     tags:
       - 'v*.*.*'
-  pull_request:
-    branches:
-      - 'main'
-      - 'dev'
   workflow_dispatch:
 
 env:
+  REGISTRY: registry.digitalocean.com
   IMAGE_NAME: hyperfy-playground
 
 jobs:
@@ -44,25 +35,32 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to GitHub Container Registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to DigitalOcean Container Registry
+        run: doctl registry login --expiry-seconds 1200
+
+      - name: Get registry name
+        id: registry
+        run: |
+          REGISTRY_NAME=$(doctl registry get --format Name --no-header)
+          echo "name=$REGISTRY_NAME" >> $GITHUB_OUTPUT
+          echo "Registry name: $REGISTRY_NAME"
 
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ${{ env.REGISTRY }}/${{ steps.registry.outputs.name }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' }}
@@ -76,8 +74,8 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
+          platforms: linux/amd64
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -88,38 +86,33 @@ jobs:
           provenance: false
 
       - name: Generate deployment report
-        if: github.event_name != 'pull_request'
         run: |
-          echo "### 🚀 Docker Image Published to GitHub Container Registry" >> $GITHUB_STEP_SUMMARY
+          echo "### 🌊 Docker Image Published to DigitalOcean" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** v${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Branch:** ${GITHUB_REF#refs/heads/}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry:** ghcr.io" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** ghcr.io/${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry:** ${{ env.REGISTRY }}/${{ steps.registry.outputs.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** ${{ env.REGISTRY }}/${{ steps.registry.outputs.name }}/${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Platforms:** linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
+          echo "**Platform:** linux/amd64" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 Pull and Run Instructions" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Deployment Instructions" >> $GITHUB_STEP_SUMMARY
+          echo "Pull and run the image:" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ghcr.io/${{ github.repository }}:${GITHUB_REF#refs/heads/}" >> $GITHUB_STEP_SUMMARY
-          echo "docker run -p 3000:3000 ghcr.io/${{ github.repository }}:${GITHUB_REF#refs/heads/}" >> $GITHUB_STEP_SUMMARY
+          echo "doctl registry login" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ steps.registry.outputs.name }}/${{ env.IMAGE_NAME }}:${GITHUB_REF#refs/heads/}" >> $GITHUB_STEP_SUMMARY
+          echo "docker run -p 3000:3000 ${{ env.REGISTRY }}/${{ steps.registry.outputs.name }}/${{ env.IMAGE_NAME }}:${GITHUB_REF#refs/heads/}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
-      - name: Build summary for PR
-        if: github.event_name == 'pull_request'
+      - name: Clean up old images
+        continue-on-error: true
         run: |
-          echo "### 🔨 Docker Build Test (PR)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** v${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**PR:** #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Docker build completed successfully" >> $GITHUB_STEP_SUMMARY
-          echo "Image will be pushed when PR is merged." >> $GITHUB_STEP_SUMMARY
+          # Start garbage collection to keep registry clean
+          doctl registry garbage-collection start --include-untagged-manifests --force

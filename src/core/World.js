@@ -87,6 +87,7 @@ export class World extends EventEmitter {
         'animation',     // No dependencies
         'events',        // No dependencies
         'scripts',       // Depends on events
+        'sound',         // Depends on events, apps, entities, network
         'chat',          // No dependencies
         'blueprints',    // Depends on collections
         'entities',      // Depends on blueprints
@@ -118,6 +119,13 @@ export class World extends EventEmitter {
           }
           console.log(`[world] ✓ Collections ready (${collCount} collections)`)
         }
+
+        if (systemName === 'sound' && this[systemName]) {
+          if (!this[systemName].isReady) {
+            throw new Error('[sound] System initialization failed')
+          }
+          console.log('[world] ✓ Sound system ready')
+        }
       }
 
       // Initialize any remaining systems (server-specific, client-specific, etc.)
@@ -127,6 +135,14 @@ export class World extends EventEmitter {
         if (!orderedNames.has(systemName)) {
           console.log(`[world] Initializing ${systemName}...`)
           await system.init(options)
+        }
+      }
+
+      // Validate mob assets after all systems initialized (client-only)
+      if (options.isClient && this.audio && this.mobs) {
+        const mobCount = this.mobs.getMobBlueprints?.()?.length || 0
+        if (mobCount > 0) {
+          await this.audio.validateMobAssets()
         }
       }
 

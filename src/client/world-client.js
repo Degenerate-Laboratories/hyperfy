@@ -6,6 +6,7 @@ import { css } from '@firebolt-dev/css'
 
 import { createClientWorld } from '../core/createClientWorld'
 import { CoreUI } from './components/CoreUI'
+import { initializeSounds } from '../world/sounds'
 
 export { System } from '../core/systems/System'
 
@@ -80,11 +81,24 @@ export function Client({ wsUrl, onSetup }) {
         console.log('[client] ✓ All data loaded')
         console.log(`[client] ✓ ${mobCount} mob(s) ready`)
 
+        // Initialize sound system
+        try {
+          initializeSounds(world)
+          console.log('[client] ✓ Sound system initialized')
+        } catch (err) {
+          console.error('[client] Failed to initialize sounds:', err)
+        }
+
         setReady(true)
 
       } catch (error) {
         console.error('[FATAL] Client initialization failed:', error)
-        setError(error.message)
+        setError({
+          title: 'Failed to Start Game',
+          message: error.message,
+          technical: error.stack,
+          canRetry: !error.message.includes('FATAL'),
+        })
       }
     }
 
@@ -138,8 +152,23 @@ export function Client({ wsUrl, onSetup }) {
           color: #cccccc;
         }
         .error-message {
-          max-width: 500px;
-          text-align: center;
+          max-width: 600px;
+          text-align: left;
+          white-space: pre-wrap;
+          font-family: monospace;
+        }
+        .error-technical {
+          max-width: 800px;
+          max-height: 200px;
+          overflow-y: auto;
+          font-family: monospace;
+          font-size: 12px;
+          color: #888;
+          background: #000;
+          padding: 10px;
+          border-radius: 4px;
+          text-align: left;
+          white-space: pre-wrap;
         }
         .loading-spinner {
           width: 40px;
@@ -178,11 +207,19 @@ export function Client({ wsUrl, onSetup }) {
       {/* Error overlay */}
       {error && (
         <div className='App__error'>
-          <div className='error-title'>Failed to Load</div>
-          <div className='error-message'>{error}</div>
-          <button className='error-button' onClick={() => window.location.reload()}>
-            Retry
-          </button>
+          <div className='error-title'>{error.title || 'Failed to Load'}</div>
+          <div className='error-message'>{error.message || error}</div>
+          {error.technical && (
+            <details>
+              <summary style={{ cursor: 'pointer', color: '#888' }}>Technical Details</summary>
+              <div className='error-technical'>{error.technical}</div>
+            </details>
+          )}
+          {(error.canRetry !== false) && (
+            <button className='error-button' onClick={() => window.location.reload()}>
+              Retry
+            </button>
+          )}
         </div>
       )}
 
