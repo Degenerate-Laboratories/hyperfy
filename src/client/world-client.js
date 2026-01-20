@@ -6,7 +6,6 @@ import { css } from '@firebolt-dev/css'
 
 import { createClientWorld } from '../core/createClientWorld'
 import { CoreUI } from './components/CoreUI'
-import { initPlayerFootsteps } from '../world/player-footsteps'
 import { initializeSounds } from '../world/sounds'
 
 export { System } from '../core/systems/System'
@@ -82,13 +81,8 @@ export function Client({ wsUrl, onSetup }) {
         console.log('[client] ✓ All data loaded')
         console.log(`[client] ✓ ${mobCount} mob(s) ready`)
 
-        // Initialize sound systems
+        // Initialize sound system
         try {
-          // Keep old footsteps for now (proven working)
-          initPlayerFootsteps(world)
-          console.log('[client] ✓ Player footsteps initialized')
-
-          // Initialize new unified system (for future sounds)
           initializeSounds(world)
           console.log('[client] ✓ Sound system initialized')
         } catch (err) {
