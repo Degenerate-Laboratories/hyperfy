@@ -23,6 +23,7 @@ import { Snaps } from './systems/Snaps'
 import { Wind } from './systems/Wind'
 import { XR } from './systems/XR'
 import { ClientAI } from './systems/ClientAI'
+import { CombatSystem, TargetingSystem } from '../degen/combat/index.js'
 
 export function createClientWorld() {
   const world = new World()
@@ -49,5 +50,10 @@ export function createClientWorld() {
   world.register('wind', Wind)
   world.register('xr', XR)
   world.register('ai', ClientAI)
+
+  // Register combat systems (client-side)
+  world.register('combat', CombatSystem)
+  world.register('targeting', TargetingSystem)  // Click-to-target with bounding boxes
+
   return world
 }

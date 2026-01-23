@@ -8,6 +8,7 @@ import { ServerEnvironment } from './systems/ServerEnvironment'
 import { ServerMonitor } from './systems/ServerMonitor'
 import { ServerAI } from './systems/ServerAI'
 import { ServerSound } from './systems/ServerSound'
+import { CombatSystem } from '../degen/combat/index.js'
 
 export function createServerWorld() {
   const world = new World()
@@ -19,5 +20,9 @@ export function createServerWorld() {
   world.register('monitor', ServerMonitor)
   world.register('ai', ServerAI)
   world.register('sound', ServerSound)
+
+  // Register combat system (server-side only)
+  world.register('combat', CombatSystem)
+
   return world
 }

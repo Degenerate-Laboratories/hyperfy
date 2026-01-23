@@ -358,6 +358,20 @@ export class App extends Entity {
   }
 
   emit(name, a1, a2) {
+    // Combat event broadcasting to world event system
+    const combatEvents = ['mob:spawn', 'mob:attack', 'mob:death', 'mob:despawn']
+    if (combatEvents.includes(name) && this.world?.events) {
+      const enrichedData = {
+        ...a1,
+        sourceApp: this,
+        sourceAppId: this.id,
+        timestamp: Date.now()
+      }
+      console.log(`[App] 📡 Broadcasting ${name}...`)
+      this.world.events.emit(name, enrichedData)
+    }
+
+    // Local emit (backwards compatibility)
     if (!this.listeners[name]) return
     for (const callback of this.listeners[name]) {
       callback(a1, a2)

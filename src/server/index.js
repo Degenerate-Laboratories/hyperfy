@@ -18,6 +18,7 @@ import { assets } from './assets'
 import { collections } from './collections'
 import { mobs } from './mobs'
 import { cleaner } from './cleaner'
+// import { initCombatAPI } from './combat-api-bridge.js'
 
 const rootDir = path.join(__dirname, '../')
 const worldDir = path.join(rootDir, process.env.WORLD)
@@ -125,6 +126,9 @@ try {
   console.error(error.stack)
   process.exit(1)  // ← FAIL FAST
 }
+
+// [Server] Combat API Bridge remains disabled for stability
+// await initCombatAPI(world)  // Enable after verifying Phase 3 works
 
 fastify.register(cors)
 fastify.register(compress)
