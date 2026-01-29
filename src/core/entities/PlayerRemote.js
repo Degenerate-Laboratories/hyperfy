@@ -90,6 +90,29 @@ export class PlayerRemote extends Entity {
     this.gaze = new THREE.Vector3()
 
     this.world.setHot(this, true)
+
+    // Combat event listeners
+    this.healthListener = data => {
+      if (data.targetId !== this.data.id) return
+
+      this.data.health = data.health
+      this.data.maxHealth = data.maxHealth || 100
+
+      if (this.nametag) {
+        this.nametag.health = data.health
+      }
+
+      console.log(`[player-remote] Health: ${data.health}/${data.maxHealth}`)
+    }
+
+    this.deathListener = data => {
+      if (data.entityId !== this.data.id) return
+      console.log(`[player-remote] 💀 ${this.data.name} died!`)
+    }
+
+    this.world.events.on('combat:damage', this.healthListener)
+    this.world.events.on('combat:heal', this.healthListener)
+    this.world.events.on('combat:death', this.deathListener)
   }
 
   applyAvatar() {

@@ -26,6 +26,11 @@ const names = [
   'ai',
   'ping',
   'pong',
+  'combatDamage',
+  'combatHeal',
+  'combatDeath',
+  'combatStateChanged',
+  'abilityActivate',
 ]
 
 const byName = {}

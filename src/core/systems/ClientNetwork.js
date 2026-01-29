@@ -239,6 +239,95 @@ export class ClientNetwork extends System {
     this.world.livekit.setMuted(data.playerId, data.muted)
   }
 
+  onCombatDamage = data => {
+    const { targetId, sourceId, amount, health, maxHealth } = data
+    const entity = this.world.entities.get(targetId)
+
+    if (entity) {
+      const oldHealth = entity.data.health || 100
+      entity.data.health = health
+      entity.data.maxHealth = maxHealth || entity.data.maxHealth || 100
+
+      if (entity.nametag) {
+        entity.nametag.health = health
+      }
+
+      // Emit entity:health event for HealthBars
+      this.world.events.emit('entity:health', {
+        entityId: targetId,
+        newHealth: health,
+        oldHealth: oldHealth,
+        maxHealth: entity.data.maxHealth,
+        change: -amount
+      })
+    }
+
+    console.log(`[combat] 💥 ${sourceId || 'unknown'} → ${targetId}: ${amount} damage (${health} HP)`)
+    this.world.events.emit('combat:damage', data)
+  }
+
+  onCombatHeal = data => {
+    const { targetId, sourceId, amount, health, maxHealth } = data
+    const entity = this.world.entities.get(targetId)
+
+    if (entity) {
+      const oldHealth = entity.data.health || 0
+      entity.data.health = health
+      entity.data.maxHealth = maxHealth || entity.data.maxHealth || 100
+
+      if (entity.nametag) {
+        entity.nametag.health = health
+      }
+
+      // Emit entity:health event for HealthBars
+      this.world.events.emit('entity:health', {
+        entityId: targetId,
+        newHealth: health,
+        oldHealth: oldHealth,
+        maxHealth: entity.data.maxHealth,
+        change: amount
+      })
+    }
+
+    console.log(`[combat] 💚 ${sourceId || 'unknown'} → ${targetId}: +${amount} heal (${health} HP)`)
+    this.world.events.emit('combat:heal', data)
+  }
+
+  onCombatDeath = data => {
+    const { entityId, killerId } = data
+    console.log(`[combat] 💀 ${entityId} killed by ${killerId || 'unknown'}`)
+    this.world.events.emit('combat:death', data)
+  }
+
+  onCombatStateChanged = data => {
+    const { entityId, inCombat, targetId } = data
+    const entity = this.world.entities.get(entityId)
+
+    if (!entity) return
+
+    // Update entity combat state
+    entity.data.inCombat = inCombat
+    entity.data.combatTargetId = targetId
+
+    // Apply combat animation to local player
+    if (entity.isLocal) {
+      if (inCombat) {
+        // Enter combat stance (use TALK mode as temporary combat animation)
+        entity.data.effect = { emote: 'asset://emote-talk.glb?l=1' }
+        console.log('[combat] Entering combat stance')
+      } else {
+        // Exit combat stance (clear effect)
+        entity.data.effect = null
+        console.log('[combat] Exiting combat stance')
+      }
+    }
+
+    // Emit local event for UI components
+    this.world.events.emit('combat:stateChanged', data)
+
+    console.log(`[combat] ${entityId} combat state: ${inCombat ? 'ENGAGED' : 'ENDED'}`)
+  }
+
   onPong = time => {
     this.world.stats?.onPong(time)
   }
