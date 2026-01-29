@@ -18,7 +18,7 @@ import { assets } from './assets'
 import { collections } from './collections'
 import { mobs } from './mobs'
 import { cleaner } from './cleaner'
-// import { initCombatAPI } from './combat-api-bridge.js'
+import { initCombatAPI } from './combat-api-bridge.js'
 
 const rootDir = path.join(__dirname, '../')
 const worldDir = path.join(rootDir, process.env.WORLD)
@@ -120,6 +120,14 @@ try {
     storage,
     collections: collections.list,
     mobs: mobs.list,
+    // Spawn default entities at startup
+    defaultSpawns: [
+      {
+        blueprintId: 'a-sewer-rat-v74',  // a sewer rat v76
+        position: [0, 0, -10],
+        rotation: [0, 0, 0, 1]
+      }
+    ]
   })
 } catch (error) {
   console.error('[FATAL] World initialization failed:', error.message)
@@ -127,8 +135,8 @@ try {
   process.exit(1)  // ← FAIL FAST
 }
 
-// [Server] Combat API Bridge remains disabled for stability
-// await initCombatAPI(world)  // Enable after verifying Phase 3 works
+// [Server] Combat API Bridge enabled for network event propagation
+await initCombatAPI(world)
 
 fastify.register(cors)
 fastify.register(compress)

@@ -9,6 +9,7 @@ import { ServerMonitor } from './systems/ServerMonitor'
 import { ServerAI } from './systems/ServerAI'
 import { ServerSound } from './systems/ServerSound'
 import { CombatSystem } from '../degen/combat/index.js'
+import { StartupValidator } from './systems/StartupValidator.js'
 
 export function createServerWorld() {
   const world = new World()
@@ -23,6 +24,9 @@ export function createServerWorld() {
 
   // Register combat system (server-side only)
   world.register('combat', CombatSystem)
+
+  // Register startup validator (server-side only)
+  world.register('startupValidator', StartupValidator)
 
   return world
 }

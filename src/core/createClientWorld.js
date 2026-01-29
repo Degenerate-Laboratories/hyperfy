@@ -24,6 +24,7 @@ import { Wind } from './systems/Wind'
 import { XR } from './systems/XR'
 import { ClientAI } from './systems/ClientAI'
 import { CombatSystem, TargetingSystem } from '../degen/combat/index.js'
+import { CombatController } from '../degen/combat/CombatController.js'
 
 export function createClientWorld() {
   const world = new World()
@@ -54,6 +55,7 @@ export function createClientWorld() {
   // Register combat systems (client-side)
   world.register('combat', CombatSystem)
   world.register('targeting', TargetingSystem)  // Click-to-target with bounding boxes
+  world.register('combatController', CombatController)  // Auto-attack system
 
   return world
 }

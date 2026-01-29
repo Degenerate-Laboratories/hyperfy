@@ -155,12 +155,12 @@ export class ClientNetwork extends System {
 
       // Deserialize in dependency order
       this.world.collections.deserialize(data.collections)
-      this.world.mobs.deserialize(data.mobs)  // ← Will throw if invalid
+      this.world.blueprints.deserialize(data.blueprints)  // ← MUST come before mobs
+      this.world.mobs.deserialize(data.mobs)  // ← Needs blueprints to be ready
       this.world.settings.deserialize(data.settings)
       this.world.settings.setHasAdminCode(data.hasAdminCode)
       this.world.chat.deserialize(data.chat)
       this.world.ai.deserialize(data.ai)
-      this.world.blueprints.deserialize(data.blueprints)
       this.world.entities.deserialize(data.entities)
       this.world.livekit?.deserialize(data.livekit)
       storage.set('authToken', data.authToken)
@@ -241,6 +241,25 @@ export class ClientNetwork extends System {
 
   onPong = time => {
     this.world.stats?.onPong(time)
+  }
+
+  onCombatDamage = data => {
+    console.log('[ClientNetwork] Received combat damage:', data)
+
+    // Update entity health immediately (for smooth UI)
+    const entity = this.world.entities.get(data.targetId)
+    if (entity) {
+      entity.data.health = data.newHealth || (entity.data.health - data.damage)
+      entity.data.maxHealth = data.maxHealth || entity.data.maxHealth || 100
+
+      // Update nametag if entity has one
+      if (entity.nametag) {
+        entity.nametag.health = entity.data.health
+      }
+    }
+
+    // Emit to local world.events for UI components
+    this.world.events.emit('combat:damage', data)
   }
 
   onKick = code => {

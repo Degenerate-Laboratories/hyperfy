@@ -62,6 +62,13 @@ export class App extends Entity {
     // fetch blueprint
     const blueprint = this.world.blueprints.get(this.data.blueprint)
 
+    if (!blueprint) {
+      console.error(`[App.build] Blueprint not found: ${this.data.blueprint}`)
+      this.unbuild()
+      this.building = false
+      return
+    }
+
     if (blueprint.disabled) {
       this.unbuild()
       this.blueprint = blueprint
@@ -365,6 +372,7 @@ export class App extends Entity {
         ...a1,
         sourceApp: this,
         sourceAppId: this.id,
+        sourceEntityId: this.id,
         timestamp: Date.now()
       }
       console.log(`[App] 📡 Broadcasting ${name}...`)

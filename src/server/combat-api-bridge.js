@@ -1,8 +1,8 @@
 /**
  * Combat API Bridge - v35 Implementation
- * 
+ *
  * Bridges between:
- * - Legacy world.combatManager API (v31 compatibility)  
+ * - Legacy world.combatManager API (v31 compatibility)
  * - Modern CombatSystem events (v35 architecture)
  * - Event-driven mob communication (v32+ events)
  *
@@ -10,6 +10,7 @@
  */
 
 import { CombatEvents } from '../degen/combat/events/CombatEvents.js'
+import { AttackAnimations, getRandomAnimation } from '../core/extras/playerEmotes.js'
 
 export class CombatAPIBridge {
   constructor(world) {
@@ -25,21 +26,26 @@ export class CombatAPIBridge {
    */
   async init() {
     console.log('[Combat API Bridge] Setting up API...')
-    
+
     // Get CombatSystem reference
     this.combatSystem = this.world.combat
     if (!this.combatSystem) {
       console.warn('[Combat API Bridge] CombatSystem not found!')
       return
     }
-    
+
+    // Start AI update loop (10 times per second)
+    this.updateInterval = setInterval(() => this.updateMobs(), 100)
+
     console.log('[Combat API Bridge] ✅ CombatSystem connected')
+    console.log('[Combat API Bridge] ✅ AI update loop started (10 Hz)')
   }
 
   /**
-   * Register mob with combat system
+   * Legacy registerMob for compatibility with old API
    * @param {Object} app - Mob app instance
    * @param {Object} config - Combat configuration
+   * @deprecated Use event-driven mob:spawn instead
    */
   registerMob(app, config) {
     if (!app || !app.id) {
@@ -48,7 +54,9 @@ export class CombatAPIBridge {
     }
 
     const mobId = app.id
-    const mobConfig = {
+
+    // Register with CombatSystem
+    this.combatSystem.addCombatant(mobId, {
       maxHealth: config.maxHealth || config.health || 100,
       armor: config.armor || 0,
       damage: {
@@ -57,71 +65,47 @@ export class CombatAPIBridge {
       },
       level: config.level || 1,
       name: config.name || 'Unknown Mob'
-    }
-
-    // Register with CombatSystem
-    this.combatSystem.addCombatant(mobId, mobConfig)
-    
-    // Store mob state
-    this.mobs.set(mobId, {
-      app,
-      config: mobConfig,
-      lastAttackTime: 0,
-      attackCooldown: config.attackCooldown || 1500
     })
 
-    console.log(`[Combat API Bridge] ✅ Mob registered: ${mobConfig.name} (${mobId})`)
-    
-    return { 
-      success: true, 
-      mobId: mobId,
-      config: mobConfig
+    // Store AI state
+    this.mobs.set(mobId, {
+      app,
+      entityId: mobId,
+      config: {
+        aggroRange: config.aggroRange || 15,
+        attackRange: config.attackRange || 3,
+        moveSpeed: config.moveSpeed || 2,
+        aggressive: config.aggressive !== false,
+        attackCooldown: config.attackCooldown || 1500
+      },
+      state: 'idle',
+      targetId: null,
+      lastAttackTime: 0,
+      homePosition: app.position ? app.position.toArray() : [0, 0, 0]
+    })
+
+    console.log(`[Combat API Bridge] ✅ Mob registered: ${config.name} (${mobId})`)
+
+    return {
+      success: true,
+      mobId: mobId
     }
   }
 
   /**
-   * Process attack from mob to player
-   * @param {string} sourceId - Attacker ID  
+   * Legacy attack method for compatibility
+   * @param {string} sourceId - Attacker ID
    * @param {string} targetId - Target ID
+   * @deprecated Use mob:attack event instead
    */
   attack(sourceId, targetId) {
-    const mobState = this.mobs.get(sourceId)
-    if (!mobState) {
-      console.warn(`[Combat API Bridge] Unknown attacker: ${sourceId}`)
-      return { success: false, error: 'Unknown attacker' }
-    }
-
-    // Check cooldown
-    const now = Date.now()
-    if (now - mobState.lastAttackTime < mobState.attackCooldown) {
-      return { success: false, error: 'Attack on cooldown' }
-    }
-
-    // Calculate server-authoritative damage
-    const { min, max } = mobState.config.damage
-    const damage = Math.floor(Math.random() * (max - min + 1)) + min
-
-    // Apply damage via CombatSystem
-    this.world.events.emit(CombatEvents.DAMAGE, {
+    // Just emit the event - let the event handler do the work
+    this.world.events.emit('mob:attack', {
       sourceId,
-      targetId, 
-      amount: damage,
-      damageType: 'physical',
-      timestamp: now
+      targetId
     })
 
-    // Update cooldown
-    mobState.lastAttackTime = now
-
-    console.log(`[Combat API Bridge] ⚔️ ${sourceId} → ${targetId}: ${damage} damage`)
-
-    return { 
-      success: true, 
-      damage, 
-      sourceId, 
-      targetId,
-      timestamp: now
-    }
+    return { success: true, sourceId, targetId }
   }
 
   /**
@@ -158,6 +142,85 @@ export class CombatAPIBridge {
   getMobState(mobId) {
     return this.mobs.get(mobId)
   }
+
+  /**
+   * AI UPDATE LOOP
+   * Runs 10 times per second to update mob behavior
+   * - Auto-targets nearest player in aggro range
+   * - Moves towards target
+   * - Attacks when in range
+   */
+  updateMobs() {
+    for (const [mobId, mobState] of this.mobs.entries()) {
+      // Skip dead mobs or non-aggressive mobs
+      if (mobState.state === 'dead') continue
+      if (!mobState.config.aggressive) continue
+
+      const mobPos = mobState.app.position
+      if (!mobPos) continue
+
+      // Find nearest player in range
+      let nearestPlayer = null
+      let nearestDist = Infinity
+
+      for (const socket of this.world.network.sockets.values()) {
+        const player = socket.player
+        if (!player || !player.position) continue
+
+        const dist = mobPos.distanceTo(player.position.value)
+
+        // AUTO-TARGET: Find nearest player within aggro range
+        if (dist < mobState.config.aggroRange && dist < nearestDist) {
+          nearestPlayer = player
+          nearestDist = dist
+        }
+      }
+
+      // Update mob state based on nearest player
+      if (nearestPlayer && nearestDist < mobState.config.aggroRange) {
+        // AUTO-AGGRO: Transition to aggro/chasing state
+        if (mobState.state === 'idle') {
+          console.log(`[Combat API] 🎯 ${mobState.config.name} aggros on ${nearestPlayer.data.name} (range: ${nearestDist.toFixed(1)})`)
+        }
+
+        mobState.targetId = nearestPlayer.data.id
+        mobState.state = 'chasing'
+
+        // Attack if in range
+        if (nearestDist < mobState.config.attackRange) {
+          const now = Date.now()
+          if (now - mobState.lastAttackTime >= mobState.attackCooldown) {
+            // Trigger mob attack
+            this.world.events.emit('mob:attack', {
+              sourceId: mobId,
+              targetId: nearestPlayer.data.id
+            })
+
+            mobState.lastAttackTime = now
+            mobState.state = 'attacking'
+          }
+        }
+      } else {
+        // No target in range, return to idle
+        if (mobState.state !== 'idle') {
+          mobState.state = 'idle'
+          mobState.targetId = null
+        }
+      }
+    }
+  }
+
+  /**
+   * Clean up on destroy
+   */
+  destroy() {
+    if (this.updateInterval) {
+      clearInterval(this.updateInterval)
+      this.updateInterval = null
+    }
+    this.mobs.clear()
+    console.log('[Combat API Bridge] Shutdown complete')
+  }
 }
 
 /**
@@ -180,40 +243,106 @@ export async function initCombatAPI(world) {
 
     console.log(`[Combat API] 📨 mob:spawn: ${data.name} from ${data.sourceEntityId}`)
 
-    const result = bridge.registerMob(data.sourceApp, {
-      name: data.name,
+    // CRITICAL: Use data.sourceEntityId instead of data.sourceApp.id
+    const mobId = data.sourceEntityId
+    const app = world.entities.get(mobId)
+
+    if (!app) {
+      console.warn('[Combat API] Mob entity not found:', mobId)
+      return
+    }
+
+    // Register with CombatSystem (single source of truth)
+    world.combat.addCombatant(mobId, {
+      maxHealth: data.health || 100,
+      armor: data.armor || 0,
+      damage: { min: data.damageMin || 5, max: data.damageMax || 15 },
       level: data.level || 1,
-      health: data.health || 100,
-      maxHealth: data.maxHealth || data.health || 100,
-      damageMin: data.damageMin || 5,
-      damageMax: data.damageMax || 15,
-      attackCooldown: data.attackCooldown || 1500
+      name: data.name
     })
 
+    // Store AI state separately (not combat state)
+    bridge.mobs.set(mobId, {
+      app,
+      entityId: mobId,
+      config: {
+        aggroRange: data.detectionRange || 15,
+        attackRange: data.attackRange || 3,
+        moveSpeed: data.moveSpeed || 2,
+        aggressive: data.aggressive !== false,
+        attackCooldown: data.attackCooldown || 1500
+      },
+      state: 'idle',
+      targetId: null,
+      lastAttackTime: 0,
+      homePosition: app.position ? app.position.toArray() : [0, 0, 0]
+    })
+
+    console.log(`[Combat API] ✅ Registered mob ${data.name} (${mobId}) with CombatSystem`)
+
     // Send confirmation back to mob
-    if (result.success && data.sourceApp) {
-      data.sourceApp.emit('mob:spawn', {
-        npcTypeId: result.mobId,
+    if (app && app.emit) {
+      app.emit('mob:spawn', {
+        npcTypeId: mobId,
         spawnId: data.sourceEntityId
       })
     }
   })
 
-  // MOB:ATTACK - Process attack from mob to player  
+  // MOB:ATTACK - Process attack from mob to player
   world.events.on('mob:attack', (data) => {
     if (!data || !data.sourceId || !data.targetId) {
       console.warn('[Combat API] Invalid mob:attack data:', data)
       return
     }
 
-    console.log(`[Combat API] ⚔️ mob:attack: ${data.sourceId} → ${data.targetId}`)
+    const { sourceId, targetId } = data
 
-    // Execute server-authoritative attack
-    const result = bridge.attack(data.sourceId, data.targetId)
+    console.log(`[Combat API] ⚔️ mob:attack: ${sourceId} → ${targetId}`)
 
-    if (result.success) {
-      console.log(`[Combat API] ✅ Attack processed: ${result.damage} damage`)
+    // Let CombatSystem handle damage calculation
+    const mobCombatant = world.combat.getCombatant(sourceId)
+    if (!mobCombatant) {
+      console.warn('[Combat API] Mob not in combat system:', sourceId)
+      return
     }
+
+    // Check cooldown
+    const mobState = bridge.mobs.get(sourceId)
+    if (mobState) {
+      const now = Date.now()
+      if (now - mobState.lastAttackTime < mobState.config.attackCooldown) {
+        return // Attack on cooldown
+      }
+      mobState.lastAttackTime = now
+    }
+
+    // Calculate damage from mob stats
+    const min = mobCombatant.damageMin
+    const max = mobCombatant.damageMax
+    const damage = Math.floor(Math.random() * (max - min + 1)) + min
+
+    // Emit damage event (CombatSystem will handle)
+    world.events.emit(CombatEvents.DAMAGE, {
+      sourceId,
+      targetId,
+      amount: damage,
+      damageType: 'physical',
+      timestamp: Date.now()
+    })
+
+    // Play attack emote (v32 pattern)
+    const attackEmote = getRandomAnimation(AttackAnimations) + '?l=0'
+    const mobEntity = world.entities.get(sourceId)
+    if (mobEntity) {
+      mobEntity.data.emote = attackEmote
+      world.network.send('entityModified', {
+        id: sourceId,
+        e: attackEmote
+      })
+    }
+
+    console.log(`[Combat API] ✅ Attack emote sent, damage event emitted: ${damage}`)
   })
 
   // MOB:DEATH - Handle mob death
@@ -239,7 +368,66 @@ export async function initCombatAPI(world) {
     }
   })
 
-  console.log('[Combat API] ✅ Event listeners registered (mob:spawn, mob:attack, mob:death, mob:despawn)')
+  // PLAYER:ATTACK - Handle player attacking (from command or network event)
+  world.events.on('command', (data) => {
+    const { playerId, args } = data
+    const [cmd, targetId] = args
+
+    // Only handle playerAttack commands
+    if (cmd !== 'playerAttack') return
+    if (!targetId) return
+
+    const player = world.entities.get(playerId)
+    const target = world.entities.get(targetId)
+
+    if (!player || !target) {
+      console.warn('[Combat API] Invalid player attack:', { playerId, targetId })
+      return
+    }
+
+    console.log(`[Combat API] 🗡️ Player ${player.data.name} attacking ${target.data.name || targetId}`)
+
+    // Play random attack emote on player
+    const attackEmote = getRandomAnimation(AttackAnimations) + '?l=0'  // ?l=0 = play once, no loop
+    player.data.emote = attackEmote
+
+    // Broadcast emote to all clients
+    world.network.send('entityModified', {
+      id: playerId,
+      e: attackEmote  // 'e' = emote field
+    })
+
+    console.log(`[Combat API] 🎭 Player attack emote: ${attackEmote}`)
+
+    // Check if target is a mob (trigger auto-retaliation)
+    const mobState = bridge.mobs.get(targetId)
+    if (mobState && mobState.state === 'idle') {
+      // AUTO-RETALIATION: Mob aggros when attacked
+      mobState.state = 'aggro'
+      mobState.targetId = playerId
+      console.log(`[Combat API] ⚔️ ${target.data.name || 'Mob'} retaliates against ${player.data.name}`)
+    }
+
+    // Process player damage to target
+    const playerDamage = 10 // TODO: Calculate from player stats
+    world.events.emit(CombatEvents.DAMAGE, {
+      sourceId: playerId,
+      targetId: targetId,
+      amount: playerDamage,
+      damageType: 'physical',
+      timestamp: Date.now()
+    })
+
+    // Broadcast damage event
+    world.network.send('combatDamage', {
+      sourceId: playerId,
+      targetId: targetId,
+      damage: playerDamage,
+      timestamp: Date.now()
+    })
+  })
+
+  console.log('[Combat API] ✅ Event listeners registered (mob:spawn, mob:attack, mob:death, mob:despawn, player:attack)')
 
   // =========================================================================
   // LEGACY COMPATIBILITY API (v31 Pattern)
@@ -247,11 +435,18 @@ export async function initCombatAPI(world) {
 
   // Public combat API
   world.combat = {
+    // Legacy bridge methods
     registerMob: (app, config) => bridge.registerMob(app, config),
     attack: (attacker, target) => bridge.attack(attacker, target),
     handleDeath: (mobState, killerId) => bridge.handleDeath(mobState, killerId),
     mobs: bridge.mobs,
-    getMobState: (id) => bridge.getMobState(id)
+    getMobState: (id) => bridge.getMobState(id),
+
+    // CombatSystem delegation methods (delegate to the actual CombatSystem instance)
+    addCombatant: (entityId, config) => bridge.combatSystem?.addCombatant(entityId, config),
+    removeCombatant: (entityId) => bridge.combatSystem?.removeCombatant(entityId),
+    getCombatant: (entityId) => bridge.combatSystem?.getCombatant(entityId),
+    hasCombatant: (entityId) => bridge.combatSystem?.hasCombatant(entityId)
   }
 
   // Legacy combatManager API (v31 compatibility)

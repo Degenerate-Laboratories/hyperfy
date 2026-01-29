@@ -1,4 +1,8 @@
+// S3 base URL for emotes (use direct endpoint, not CDN subdomain)
+const EMOTE_CDN = 'https://degenquest.nyc3.digitaloceanspaces.com/hyperfy-assets/emotes'
+
 export const Emotes = {
+  // ==== CORE MOVEMENT ====
   IDLE: 'asset://mp-idle.glb',
   WALK: 'asset://mp-walk.glb?s=1.5',
   WALK_LEFT: 'asset://mp-walk-left.glb?s=1.5',
@@ -13,6 +17,18 @@ export const Emotes = {
   FLY: 'asset://emote-float.glb',
   FLIP: 'asset://emote-flip.glb?s=1.1',
   TALK: 'asset://emote-talk.glb',
+
+  // ==== COMBAT ====
+  ATTACK: `${EMOTE_CDN}/mp-attacking.glb`,
+  ATTACK_AXE_DOWNWARD: `${EMOTE_CDN}/Downward Attack With Axe.glb`,
+  DEATH: `${EMOTE_CDN}/mp-death.glb`,
+  DEATH_BACKWARD: `${EMOTE_CDN}/Death Falling Backwards.glb`,
+  DEATH_FORWARD: `${EMOTE_CDN}/Death Falling Forwards.glb`,
+  DEATH_LEFT: `${EMOTE_CDN}/Death Falling To The Left.glb`,
+  DEATH_KNEE: `${EMOTE_CDN}/Death Hit From The Back Falling On One Knee.glb`,
+  DYING_BACKWARD: `${EMOTE_CDN}/Dying Falling Backward.glb`,
+  HIT_UPPERCUT: `${EMOTE_CDN}/Getting Rocked By A Big Uppercut.glb`,
+  HIT_RUNNING: `${EMOTE_CDN}/Getting Hit On The Right Side Of The Body With An Object When Running.glb`,
 }
 
 export const emoteUrls = [
@@ -31,3 +47,28 @@ export const emoteUrls = [
   Emotes.FLIP,
   Emotes.TALK,
 ]
+
+// Helper arrays for randomizing combat animations
+export const AttackAnimations = [
+  Emotes.ATTACK,
+  Emotes.ATTACK_AXE_DOWNWARD,
+]
+
+export const HitReactionAnimations = [
+  Emotes.HIT_UPPERCUT,
+  Emotes.HIT_RUNNING,
+]
+
+export const DeathAnimations = [
+  Emotes.DEATH,
+  Emotes.DEATH_BACKWARD,
+  Emotes.DEATH_FORWARD,
+  Emotes.DEATH_LEFT,
+  Emotes.DEATH_KNEE,
+  Emotes.DYING_BACKWARD,
+]
+
+// Helper function to get random animation from array
+export function getRandomAnimation(animations) {
+  return animations[Math.floor(Math.random() * animations.length)]
+}

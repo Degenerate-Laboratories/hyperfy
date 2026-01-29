@@ -147,6 +147,27 @@ export class World extends EventEmitter {
       }
 
       console.log('[world] ✓ All systems initialized')
+
+      // Run startup validation on server (if available and enabled)
+      if (this.startupValidator && options.validateStartup !== false) {
+        console.log('[world] 🔍 Running startup validation...')
+        const validationResults = await this.startupValidator.validate()
+
+        if (!validationResults.passed) {
+          console.error('[world] ❌ Startup validation failed:')
+          validationResults.errors.forEach(error => console.error(`  - ${error}`))
+          throw new Error('STARTUP_VALIDATION_FAILED')
+        }
+
+        console.log('[world] ✅ Startup validation passed')
+      }
+
+      // Spawn default entities on server (if configured)
+      if (this.mobs && options.defaultSpawns && options.defaultSpawns.length > 0) {
+        console.log('[world] 🐀 Spawning default entities...')
+        await this.mobs.spawnDefaultEntities({ defaultSpawns: options.defaultSpawns })
+      }
+
       this.ready = true
       this.emit('ready')
 

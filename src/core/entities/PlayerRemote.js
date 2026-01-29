@@ -89,6 +89,26 @@ export class PlayerRemote extends Entity {
     this.axis = new THREE.Vector3()
     this.gaze = new THREE.Vector3()
 
+    // Register player with combat system
+    if (this.world.combat) {
+      this.world.combat.addCombatant(this.data.id, {
+        maxHealth: 100,
+        armor: 0,
+        damage: { min: 10, max: 20 }, // Player melee damage
+        level: 1,
+        name: this.data.name
+      })
+
+      // Initialize entity.data.health to match combat system
+      const combatant = this.world.combat.getCombatant(this.data.id)
+      if (combatant) {
+        this.data.health = combatant.currentHealth
+        this.data.maxHealth = combatant.maxHealth
+      }
+
+      console.log('[PlayerRemote] Registered with combat system:', this.data.id)
+    }
+
     this.world.setHot(this, true)
   }
 
@@ -220,6 +240,16 @@ export class PlayerRemote extends Entity {
       this.data.health = data.health
       this.nametag.health = data.health
       this.world.events.emit('health', { playerId: this.data.id, health: data.health })
+
+      // Sync health to combat system (with validation to prevent NaN corruption)
+      if (this.world.combat) {
+        const combatant = this.world.combat.getCombatant(this.data.id)
+        if (combatant && typeof this.data.health === 'number' && !isNaN(this.data.health)) {
+          if (combatant.currentHealth !== this.data.health) {
+            combatant.currentHealth = this.data.health
+          }
+        }
+      }
     }
     if (data.hasOwnProperty('avatar')) {
       this.data.avatar = data.avatar

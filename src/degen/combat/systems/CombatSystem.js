@@ -176,13 +176,38 @@ export class CombatSystem extends System {
       return
     }
 
-    // Apply damage
+    // Apply damage via CombatComponent
     const result = combatant.takeDamage(amount)
 
-    // Get entity names for logging
+    // CRITICAL: Sync health back to entity.data
     const targetEntity = this.world.entities.get(targetId)
-    const sourceEntity = sourceId ? this.world.entities.get(sourceId) : null
+    if (targetEntity) {
+      targetEntity.data.health = combatant.currentHealth
+      targetEntity.data.maxHealth = combatant.maxHealth
 
+      // SERVER ONLY: Broadcast to all clients
+      if (this.world.network && this.world.network.send) {
+        // Send combatDamage event with full details
+        this.world.network.send('combatDamage', {
+          sourceId,
+          targetId,
+          damage: result.damageDealt,
+          newHealth: result.newHealth,
+          maxHealth: combatant.maxHealth,
+          timestamp: event.timestamp || Date.now()
+        })
+
+        // Also send entityModified for health bar updates
+        this.world.network.send('entityModified', {
+          id: targetId,
+          health: combatant.currentHealth,
+          maxHealth: combatant.maxHealth
+        })
+      }
+    }
+
+    // Get entity names for logging
+    const sourceEntity = sourceId ? this.world.entities.get(sourceId) : null
     const targetName = targetEntity?.data?.name || targetId
     const sourceName = sourceEntity?.data?.name || sourceId || 'Unknown'
 
@@ -196,7 +221,7 @@ export class CombatSystem extends System {
       timestamp: event.timestamp || Date.now()
     })
 
-    // Emit health changed event
+    // Emit health changed event (for UI)
     this.world.events.emit(EntityEvents.HEALTH_CHANGED, {
       entityId: targetId,
       oldHealth: result.oldHealth,
@@ -209,6 +234,8 @@ export class CombatSystem extends System {
     if (result.died) {
       this.handleDeath(targetId, sourceId)
     }
+
+    console.log(`[CombatSystem] ⚔️ ${sourceName} → ${targetName}: ${result.damageDealt} damage (${result.newHealth}/${combatant.maxHealth} HP)`)
   }
 
   /**
@@ -261,12 +288,18 @@ export class CombatSystem extends System {
    * @param {string} killerId - Killer entity ID
    */
   handleDeath(victimId, killerId) {
-    // Get entity names
     const victimEntity = this.world.entities.get(victimId)
     const killerEntity = killerId ? this.world.entities.get(killerId) : null
 
     const victimName = victimEntity?.data?.name || victimId
     const killerName = killerEntity?.data?.name || killerId || 'Unknown'
+
+    // Emit death event
+    this.world.events.emit(CombatEvents.DEATH, {
+      victimId,
+      killerId,
+      timestamp: Date.now()
+    })
 
     // Add to combat log
     this.addToLog({
@@ -276,14 +309,15 @@ export class CombatSystem extends System {
       timestamp: Date.now()
     })
 
-    // Emit death event
-    this.world.events.emit(CombatEvents.DEATH, {
-      victimId,
-      killerId,
-      timestamp: Date.now()
-    })
+    // Remove from combat system
+    this.removeCombatant(victimId)
 
-    console.log(`[CombatSystem] ${victimName} was slain by ${killerName}`)
+    // Trigger entity death (if entity supports it)
+    if (victimEntity && typeof victimEntity.onDeath === 'function') {
+      victimEntity.onDeath(killerId)
+    }
+
+    console.log(`[CombatSystem] ☠️ ${victimName} killed by ${killerName}`)
   }
 
   /**
