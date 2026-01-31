@@ -38,7 +38,24 @@ export class Mob extends App {
 
     // AI updates only run on server
     if (this.world.network.isServer) {
-      this.emit('aiUpdate', delta)
+      // Distance-based throttling: closer mobs update more frequently
+      // Uses CombatSystem's throttler for coordinated performance optimization
+      const combat = this.world.combat
+      if (combat && combat.entityIndex && combat.throttler) {
+        // Find nearest player to determine update frequency
+        const nearest = combat.entityIndex.findNearestPlayer(this.data.position, 100)
+        const distance = nearest ? nearest.distance : Infinity
+
+        // Check if this mob should update this frame
+        const shouldUpdate = combat.throttler.shouldUpdate(this.data.id, distance)
+
+        if (shouldUpdate) {
+          this.emit('aiUpdate', delta)
+        }
+      } else {
+        // Fallback: update every frame if combat system not initialized
+        this.emit('aiUpdate', delta)
+      }
     }
   }
 

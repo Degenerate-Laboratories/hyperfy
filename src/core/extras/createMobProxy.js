@@ -226,12 +226,19 @@ export function createMobProxy() {
 
     /**
      * Find nearest player within range
+     * Uses O(log n) spatial indexing via CombatSystem for performance
      * @param {number} maxDistance - Maximum search distance
      * @returns {Object|null} - { id, distance } or null
      */
     findNearestPlayer(entity, maxDistance = 20) {
       if (!entity.world.network.isServer) return null
 
+      // Use spatial indexing if combat system is available (O(log n))
+      if (entity.world.combat?.entityIndex) {
+        return entity.world.combat.entityIndex.findNearestPlayer(entity.data.position, maxDistance)
+      }
+
+      // Fallback to linear scan if combat system not initialized (O(n))
       const currentPos = new THREE.Vector3().fromArray(entity.data.position)
       let nearest = null
       let nearestDistance = maxDistance
