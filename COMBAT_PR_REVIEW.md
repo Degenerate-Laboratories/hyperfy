@@ -6,24 +6,20 @@
 - **Core Systems** (`src/core/systems/`): CombatSystem, CombatEntityIndex, PerformanceMonitor - ENGINE LEVEL
 - **Reference UI** (`src/degen/combat/`): Health bars, damage numbers, targeting - CUSTOMIZABLE REFERENCE
 
-## Issues to Address
+## Issues Addressed ✅
 
-### 1. Test Code in Core System ⚠️
-**Location:** `src/core/systems/CombatSystem.js` lines 48-50, 324-325, 607-734
-
-**Issue:** "Fake rat" PoC code embedded in core combat system
-```javascript
-// Initialize fake rats (Phase 4 - Proof of Concept)
-this.rats = new Set()
-this.nextRatId = 1
-```
-
-**Recommendation:** Remove test code or move to `src/degen/combat/utils/testHelpers.js`
+### 1. Test Code Removed from Core System
+**Fixed in commit ff04ef7**
+- Removed fake rat initialization (48-50)
+- Removed fake rat tick loop
+- Removed test methods: spawnMockRat, spawnFakeRat, despawnFakeRat, tickFakeRat
+- Renamed findAnyRat() → findAnyMob() for generic fallback
+- **Result:** 109 lines of test code removed
 
 ### 2. Documentation
-- README and TESTING docs are good
+- README and TESTING docs are comprehensive
 - Combat UI is properly isolated in `src/degen/combat/`
 - Core systems are engine-level, configurable
 
 ## Conclusion
-Clean PR structure. Just remove test code from core systems before merge.
+✅ PR ready for merge. Core combat system is clean, production-ready code only.
