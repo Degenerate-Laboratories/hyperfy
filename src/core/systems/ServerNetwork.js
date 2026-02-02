@@ -286,6 +286,7 @@ export class ServerNetwork extends System {
         maxUploadSize: process.env.PUBLIC_MAX_UPLOAD_SIZE,
         collections: this.world.collections.serialize(),
         mobs: this.world.mobs.serialize(),
+        npcs: this.world.npcEngine.serializeRegistry(),
         settings: this.world.settings.serialize(),
         chat: this.world.chat.serialize(),
         ai: this.world.ai.serialize(),
@@ -560,6 +561,58 @@ export class ServerNetwork extends System {
       return console.error('player attempted to use ai but they are not a builder')
     }
     this.world.ai.onAction(action)
+  }
+
+  onNpcSpawn = async (socket, data) => {
+    if (!socket.player.isBuilder()) {
+      return console.error('[npc] spawn requires builder permission')
+    }
+
+    const { characterId, position } = data
+    if (!characterId) {
+      return console.error('[npc] spawn: characterId required')
+    }
+
+    try {
+      // Use player position if not specified
+      const spawnPosition = position || socket.player.data.position
+
+      console.log(`[npc] Spawning ${characterId} at`, spawnPosition)
+
+      // Spawn NPC from registry
+      const npc = await this.world.npcEngine.spawnFromRegistry(characterId, {
+        spawnPosition
+      })
+
+      console.log(`[npc] ✓ Spawned ${characterId}`)
+    } catch (error) {
+      console.error(`[npc] Failed to spawn ${characterId}:`, error.message)
+    }
+  }
+
+  onNpcDespawn = async (socket, data) => {
+    if (!socket.player.isBuilder()) {
+      return console.error('[npc] despawn requires builder permission')
+    }
+
+    const { npcId } = data
+    if (!npcId) {
+      return console.error('[npc] despawn: npcId required')
+    }
+
+    try {
+      console.log(`[npc] Despawning ${npcId}`)
+
+      const success = this.world.npcEngine.despawn(npcId)
+
+      if (success) {
+        console.log(`[npc] ✓ Despawned ${npcId}`)
+      } else {
+        console.warn(`[npc] Failed to despawn ${npcId} - not found`)
+      }
+    } catch (error) {
+      console.error(`[npc] Failed to despawn ${npcId}:`, error.message)
+    }
   }
 
   onPing = (socket, time) => {

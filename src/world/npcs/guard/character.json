@@ -1,0 +1,92 @@
+
+{
+  "id": "guard",
+  "name": "Guard Maximus",
+  "title": "Protector of the Realm",
+  "model": "guard.vrm",
+  "faction": "Guards of Realm",
+  "level": 25,
+  "class": "Warrior",
+  "alignment": "lawful_good",
+  "lore": {
+    "background": "A veteran city guard who has defended Realm for over a decade. Known for his unwavering dedication to protecting citizens and maintaining order. Earned his title after single-handedly holding the South Gate against a goblin raid.",
+    "personality": "Stern but fair. Respected by citizens and feared by criminals. Has a soft spot for helping lost travelers find their way.",
+    "dialogue": {
+      "greeting": "Hail, citizen. State your business in Realm.",
+      "idle": [
+        "Keep moving, nothing to see here.",
+        "Stay vigilant. The shadows hide many threats.",
+        "The city is safe under our watch."
+      ],
+      "combat_start": "You've made a grave mistake!",
+      "combat_taunt": [
+        "For Qeynos!",
+        "Justice will be served!",
+        "Stand down or face the consequences!"
+      ],
+      "death": "The city... must... endure..."
+    }
+  },
+  "stats": {
+    "health": 200,
+    "maxHealth": 200,
+    "damageMin": 25,
+    "damageMax": 35,
+    "armor": 50,
+    "moveSpeed": 9.0,
+    "aggressive": false
+  },
+  "ai": {
+    "behavior": "patrol_defend",
+    "aggroRange": 20,
+    "attackRange": 2,
+    "maxChaseDistance": 30,
+    "patrolRadius": 10,
+    "assistAllies": true
+  },
+  "interactions": {
+    "merchant": false,
+    "quest_giver": false,
+    "trainer": false,
+    "banker": false
+  },
+  "behavior": {
+    "script": "behavior.js",
+    "autoStart": true,
+    "config": {
+      "patrolWaypoints": [
+        [0, 0, 5],
+        [10, 0, 5],
+        [10, 0, 15],
+        [0, 0, 15]
+      ],
+      "greetCooldown": 30000,
+      "greetDistance": 5,
+      "greetMessages": [
+        "Halt! State your business, traveler.",
+        "Welcome to the city. Keep the peace.",
+        "Move along, citizen."
+      ]
+    }
+  },
+  "spawn": {
+    "defaultPosition": [0, 1, 5],
+    "defaultQuaternion": [0, 0, 0, 1],
+    "autoSpawn": false,
+    "unique": true
+  },
+  "systems": {
+    "actions": {
+      "enabled": true
+    },
+    "perception": {
+      "enabled": true,
+      "radius": 20,
+      "updateRate": 0.5,
+      "detectPlayers": true
+    },
+    "commands": {
+      "enabled": true
+    }
+  }
+}

@@ -5,6 +5,7 @@ import { Settings } from './systems/Settings'
 import { Collections } from './systems/Collections'
 import { Apps } from './systems/Apps'
 import { Mobs } from './systems/Mobs'
+import { NPCEngineSystem } from './systems/NPCEngineSystem'
 import { Anchors } from './systems/Anchors'
 import { Avatars } from './systems/Avatars'
 import { Animation } from './systems/Animation'
@@ -41,6 +42,7 @@ export class World extends EventEmitter {
     this.register('collections', Collections)
     this.register('apps', Apps)
     this.register('mobs', Mobs)
+    this.register('npcEngine', NPCEngineSystem)
     this.register('anchors', Anchors)
     this.register('avatars', Avatars)
     this.register('animation', Animation)
@@ -91,6 +93,7 @@ export class World extends EventEmitter {
         'chat',          // No dependencies
         'blueprints',    // Depends on collections
         'entities',      // Depends on blueprints
+        'npcEngine',     // Depends on entities (MOVED HERE - after entities)
         'physics',       // Depends on entities
         'stage',         // Depends on entities
       ]
@@ -125,6 +128,17 @@ export class World extends EventEmitter {
             throw new Error('[sound] System initialization failed')
           }
           console.log('[world] ✓ Sound system ready')
+        }
+
+        if (systemName === 'npcEngine' && options.npcCharacters) {
+          const npcCount = system.registry?.size() || 0
+          if (npcCount === 0) {
+            throw new Error('[npcEngine] No NPC characters loaded')
+          }
+          if (!system.ready) {
+            throw new Error('[npcEngine] System not ready')
+          }
+          console.log(`[world] ✓ NPCEngine ready (${npcCount} characters)`)
         }
       }
 

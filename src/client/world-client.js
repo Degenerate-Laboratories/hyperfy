@@ -75,11 +75,21 @@ export function Client({ wsUrl, onSetup }) {
         // Validate critical data received
         const mobCount = world.mobs.getMobBlueprints?.()?.length || 0
         if (mobCount === 0) {
-          console.warn('[client] No mobs received from server')
+          throw new Error('[client] No mobs received from server')
+        }
+
+        // Validate NPCs received
+        const npcCount = world.npcEngine?.registry?.size() || 0
+        if (npcCount === 0) {
+          throw new Error('[client] No NPCs received from server')
+        }
+        if (!world.npcEngine?.registry?.ready) {
+          throw new Error('[client] NPC registry not ready')
         }
 
         console.log('[client] ✓ All data loaded')
         console.log(`[client] ✓ ${mobCount} mob(s) ready`)
+        console.log(`[client] ✓ ${npcCount} NPC(s) ready`)
 
         // Initialize sound system
         try {
