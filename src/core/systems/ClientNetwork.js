@@ -108,6 +108,12 @@ export class ClientNetwork extends System {
       if (!data.mobs || !Array.isArray(data.mobs)) {
         throw new Error('Invalid snapshot: mobs missing')
       }
+      if (!data.npcs || !data.npcs.characters || !Array.isArray(data.npcs.characters)) {
+        throw new Error('Invalid snapshot: npcs missing or invalid')
+      }
+      if (data.npcs.characters.length === 0) {
+        throw new Error('Invalid snapshot: no NPC characters received')
+      }
       if (!data.blueprints || !Array.isArray(data.blueprints)) {
         throw new Error('Invalid snapshot: blueprints missing')
       }
@@ -156,6 +162,7 @@ export class ClientNetwork extends System {
       // Deserialize in dependency order
       this.world.collections.deserialize(data.collections)
       this.world.mobs.deserialize(data.mobs)  // ← Will throw if invalid
+      this.world.npcEngine.deserializeRegistry(data.npcs)
       this.world.settings.deserialize(data.settings)
       this.world.settings.setHasAdminCode(data.hasAdminCode)
       this.world.chat.deserialize(data.chat)

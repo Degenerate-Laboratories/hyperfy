@@ -17,6 +17,7 @@ import { Storage } from './Storage'
 import { assets } from './assets'
 import { collections } from './collections'
 import { mobs } from './mobs'
+import { npcs } from './npcs'
 import { cleaner } from './cleaner'
 
 const rootDir = path.join(__dirname, '../')
@@ -83,6 +84,16 @@ async function bootstrap() {
       throw new Error('[FATAL] Mobs failed to load')
     }
 
+    // Initialize NPCs (CRITICAL)
+    await npcs.init({ rootDir, worldDir })
+    if (!npcs.characters || npcs.characters.length === 0) {
+      throw new Error('[FATAL] NPCs failed to load')
+    }
+    if (!npcs.ready) {
+      throw new Error('[FATAL] NPC system not ready')
+    }
+    console.log(`[bootstrap] ✓ NPCs loaded (${npcs.characters.length} characters)`)
+
     // Initialize database
     const db = await getDB({ worldDir })
 
@@ -119,6 +130,8 @@ try {
     storage,
     collections: collections.list,
     mobs: mobs.list,
+    npcCharacters: npcs.characters, // Array of NPC character definitions
+    npcBehaviors: npcs.behaviors,   // Map of behavior modules
   })
 } catch (error) {
   console.error('[FATAL] World initialization failed:', error.message)

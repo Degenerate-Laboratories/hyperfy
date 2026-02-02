@@ -897,6 +897,7 @@ function Add({ world, hidden }) {
   const collection = world.collections.get('default')
   const [tab, setTab] = useState('apps')
   const [mobsLoaded, setMobsLoaded] = useState(0) // Force re-render when mobs change
+  const [npcsUpdated, setNpcsUpdated] = useState(0) // Force re-render when NPCs change
   const span = 4
   const gap = '0.5rem'
 
@@ -916,6 +917,27 @@ function Add({ world, hidden }) {
 
     return () => clearInterval(checkMobs)
   }, [])
+
+  // Listen for NPC events
+  useEffect(() => {
+    if (!world.npcEngine?.engine?.eventBus) return
+
+    const onNPCSpawned = () => setNpcsUpdated(prev => prev + 1)
+    const onNPCDestroyed = () => setNpcsUpdated(prev => prev + 1)
+
+    world.npcEngine.engine.eventBus.on('NPC_SPAWNED', onNPCSpawned)
+    world.npcEngine.engine.eventBus.on('NPC_DESTROYED', onNPCDestroyed)
+
+    // Initial update
+    setNpcsUpdated(prev => prev + 1)
+
+    return () => {
+      if (world.npcEngine?.engine?.eventBus) {
+        world.npcEngine.engine.eventBus.off('NPC_SPAWNED', onNPCSpawned)
+        world.npcEngine.engine.eventBus.off('NPC_DESTROYED', onNPCDestroyed)
+      }
+    }
+  }, [world.npcEngine?.engine?.eventBus])
   const add = blueprint => {
     blueprint = cloneDeep(blueprint)
     blueprint.id = uuid()
@@ -967,6 +989,27 @@ function Add({ world, hidden }) {
       const mob = world.entities.add(data, true)
       world.builder.select(mob)
     }, 100)
+  }
+  const selectNPC = npc => {
+    // Select the NPC's mob entity in the builder
+    if (npc.mob) {
+      world.builder.toggle(true)
+      world.builder.select(npc.mob)
+    }
+  }
+  const spawnNPC = character => {
+    // Get spawn transform from builder
+    const transform = world.builder.getSpawnTransform(true)
+    world.builder.toggle(true)
+    world.builder.control.pointer.lock()
+
+    // Send spawn request to server (NPCs are server-authoritative)
+    world.network.send('npcSpawn', {
+      characterId: character.id,
+      position: transform.position,
+    })
+
+    console.log(`[Add] Requesting NPC spawn: ${character.name}`)
   }
   return (
     <Pane hidden={hidden}>
@@ -1048,6 +1091,9 @@ function Add({ world, hidden }) {
             <div className={cls('add-tab', { active: tab === 'mobs' })} onClick={() => setTab('mobs')}>
               Mobs
             </div>
+            <div className={cls('add-tab', { active: tab === 'npcs' })} onClick={() => setTab('npcs')}>
+              NPCs
+            </div>
           </div>
         </div>
         <div className='add-content noscrollbar'>
@@ -1079,6 +1125,117 @@ function Add({ world, hidden }) {
                   <div className='add-item-name'>{blueprint.name}</div>
                 </div>
               ))}
+            </div>
+          )}
+          {tab === 'npcs' && (
+            <div className='add-items'>
+              {/* Registry Characters */}
+              {world.npcEngine?.registry?.ready && (
+                <>
+                  <div
+                    css={css`
+                      font-size: 0.875rem;
+                      font-weight: 600;
+                      color: rgba(255, 255, 255, 0.9);
+                      padding: 0.75rem 1rem;
+                      background: rgba(255, 255, 255, 0.05);
+                      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                      margin-bottom: 0.5rem;
+                    `}
+                  >
+                    Available Characters
+                  </div>
+                  {world.npcEngine.getRegistryCharacters().map(character => (
+                    <div className='add-item' key={character.id} onClick={() => spawnNPC(character)}>
+                      <div className='add-item-image'>
+                        <div
+                          css={css`
+                            width: 100%;
+                            height: 100%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 2rem;
+                          `}
+                        >
+                          {character.class === 'Beast' ? '🐀' : '🤖'}
+                        </div>
+                      </div>
+                      <div className='add-item-name'>{character.name}</div>
+                      <div
+                        css={css`
+                          font-size: 0.75rem;
+                          color: rgba(255, 255, 255, 0.5);
+                          margin-top: 0.25rem;
+                        `}
+                      >
+                        {character.title} (Lv.{character.level})
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+              {/* Spawned NPCs */}
+              {world.npcEngine?.engine?.getNPCsArray().length > 0 && (
+                <>
+                  <div
+                    css={css`
+                      font-size: 0.875rem;
+                      font-weight: 600;
+                      color: rgba(255, 255, 255, 0.9);
+                      padding: 0.75rem 1rem;
+                      background: rgba(255, 255, 255, 0.05);
+                      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                      margin: 0.5rem 0;
+                    `}
+                  >
+                    Active NPCs
+                  </div>
+                  {world.npcEngine.engine.getNPCsArray().map(npc => (
+                    <div className='add-item' key={npc.id} onClick={() => selectNPC(npc)}>
+                      <div className='add-item-image'>
+                        <div
+                          css={css`
+                            width: 100%;
+                            height: 100%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 2rem;
+                            background: rgba(0, 255, 0, 0.1);
+                          `}
+                        >
+                          ✓
+                        </div>
+                      </div>
+                      <div className='add-item-name'>{npc.getName()}</div>
+                      <div
+                        css={css`
+                          font-size: 0.75rem;
+                          color: rgba(0, 255, 0, 0.7);
+                          margin-top: 0.25rem;
+                        `}
+                      >
+                        HP: {npc.getHealth()}/{npc.getMaxHealth()}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+              {/* Empty state */}
+              {world.npcEngine?.registry?.ready &&
+                world.npcEngine.getRegistryCharacters().length === 0 &&
+                world.npcEngine.engine.getNPCsArray().length === 0 && (
+                  <div
+                    css={css`
+                      padding: 2rem;
+                      text-align: center;
+                      color: rgba(255, 255, 255, 0.5);
+                    `}
+                  >
+                    NPC registry loaded but no characters available
+                  </div>
+                )}
             </div>
           )}
         </div>
