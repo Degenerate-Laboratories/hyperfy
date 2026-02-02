@@ -12,6 +12,7 @@ import { Events } from './systems/Events'
 import { Chat } from './systems/Chat'
 import { Blueprints } from './systems/Blueprints'
 import { Entities } from './systems/Entities'
+import { CombatSystem } from './systems/CombatSystem'
 import { Physics } from './systems/Physics'
 import { Stage } from './systems/Stage'
 import { Scripts } from './systems/Scripts'
@@ -49,6 +50,7 @@ export class World extends EventEmitter {
     this.register('chat', Chat)
     this.register('blueprints', Blueprints)
     this.register('entities', Entities)
+    this.register('combat', CombatSystem)
     this.register('physics', Physics)
     this.register('stage', Stage)
   }
@@ -91,6 +93,7 @@ export class World extends EventEmitter {
         'chat',          // No dependencies
         'blueprints',    // Depends on collections
         'entities',      // Depends on blueprints
+        'combat',        // Depends on entities, events
         'physics',       // Depends on entities
         'stage',         // Depends on entities
       ]

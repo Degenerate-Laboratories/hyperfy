@@ -389,6 +389,24 @@ export class ServerNetwork extends System {
         )
       }
     }
+    if (cmd === 'combat') {
+      const op = arg1
+      if (op === 'spawn-rat' && socket.player.isBuilder()) {
+        const player = this.world.entities.get(socket.id)
+        if (!player) return
+
+        const position = player.data.position
+        this.world.combat.spawnFakeRat(position)
+        socket.send('chatAdded', {
+          id: uuid(),
+          from: null,
+          fromId: null,
+          body: '🐀 Fake rat spawned!',
+          color: 'green',
+          createdAt: moment().toISOString(),
+        })
+      }
+    }
     // emit event for all except admin
     if (cmd !== 'admin') {
       this.world.events.emit('command', { playerId, args })
@@ -564,6 +582,20 @@ export class ServerNetwork extends System {
 
   onPing = (socket, time) => {
     socket.send('pong', time)
+  }
+
+  onAbilityActivate = (socket, data) => {
+    console.log('[ServerNetwork] onAbilityActivate received:', data)
+    const { entityId, abilityId, slotIndex, timestamp } = data
+
+    // Emit to combat system
+    console.log('[ServerNetwork] Emitting combat:ability-activate event')
+    this.world.events.emit('combat:ability-activate', {
+      entityId,
+      abilityId,
+      slotIndex,
+      timestamp
+    })
   }
 
   onDisconnect = (socket, code) => {
