@@ -45,10 +45,6 @@ export class CombatSystem extends System {
     // Initialize combat log
     this.combatLog = []
 
-    // Initialize fake rats (Phase 4 - Proof of Concept)
-    this.rats = new Set()
-    this.nextRatId = 1
-
     // Combat state tracking
     this.combatStates = new Map() // entityId → {inCombat, targetId, lastCombatTime}
 
@@ -298,8 +294,7 @@ export class CombatSystem extends System {
 
   /**
    * Fixed update - runs at fixed timestep
-   * Ticks all fake rats for AI behavior and handles combat timeout
-   * Also batches position updates for spatial index (12.5Hz vs 50Hz)
+   * Handles combat timeout and batches position updates for spatial index (12.5Hz vs 50Hz)
    */
   fixedUpdate(delta) {
     if (!this.world.network?.isServer) return
@@ -320,9 +315,6 @@ export class CombatSystem extends System {
         this.exitCombat(entityId)
       }
     })
-
-    // Tick all fake rats
-    this.rats.forEach(rat => this.tickFakeRat(rat, delta))
   }
 
   /**
@@ -590,7 +582,7 @@ export class CombatSystem extends System {
   findNearestMob(position, maxRange = 100) {
     if (!this.entityIndex) {
       // Fallback to linear scan if index not initialized
-      return this.findAnyRat()
+      return this.findAnyMob()
     }
 
     const nearest = this.entityIndex.findNearestMob(position, maxRange)
@@ -604,10 +596,11 @@ export class CombatSystem extends System {
   }
 
   /**
-   * Find any rat (legacy fallback - O(n) linear scan)
-   * @deprecated Use findNearestMob() instead
+   * Find any mob (legacy fallback - O(n) linear scan)
+   * Used when spatial indexing is not available
+   * @returns {object|null} First available mob entity or null
    */
-  findAnyRat() {
+  findAnyMob() {
     for (const [id, entity] of this.world.entities.items) {
       if (entity.data.type === 'mob' && entity.data.health > 0) {
         return entity
@@ -626,27 +619,6 @@ export class CombatSystem extends System {
   }
 
   /**
-   * Spawn mock rat entity for testing
-   */
-  spawnMockRat(position = [5, 1, 0]) {
-    const ratId = `mock-rat-${Date.now()}`
-    const ratData = {
-      id: ratId,
-      type: 'mob',
-      blueprint: 'mob-rat',
-      name: 'a sewer rat',
-      position: position,
-      quaternion: [0, 0, 0, 1],
-      health: 50,
-      maxHealth: 50
-    }
-
-    this.world.entities.add(ratData, true)
-    console.log(`[combat] Spawned mock rat: ${ratId} at`, position)
-    return ratId
-  }
-
-  /**
    * Get combat state for entity
    */
   getCombatState(entityId) {
@@ -659,81 +631,6 @@ export class CombatSystem extends System {
   isInCombat(entityId) {
     const state = this.combatStates.get(entityId)
     return state ? state.inCombat : false
-  }
-
-  /**
-   * Spawn a fake server-side rat for testing
-   * @param {array} position - Starting position [x, y, z]
-   * @returns {object} Spawned rat object
-   */
-  spawnFakeRat(position = [0, 1, 0]) {
-    const rat = {
-      id: `fake-rat-${this.nextRatId++}`,
-      position: [...position],
-      health: 50,
-      maxHealth: 50,
-      damage: 10,
-      attackRange: 2,
-      attackCooldown: 1500,
-      lastAttackTime: 0,
-      targetId: null,
-    }
-
-    this.rats.add(rat)
-    console.log(`[combat] 🐀 Spawned fake rat at ${position}`)
-    return rat
-  }
-
-  /**
-   * Despawn a fake rat
-   * @param {string} ratId - ID of rat to despawn
-   */
-  despawnFakeRat(ratId) {
-    for (const rat of this.rats) {
-      if (rat.id === ratId) {
-        this.rats.delete(rat)
-        console.log(`[combat] 🐀 Despawned ${ratId}`)
-        return
-      }
-    }
-  }
-
-  /**
-   * Tick a fake rat's AI behavior
-   * @param {object} rat - Rat object to tick
-   * @param {number} delta - Time delta
-   */
-  tickFakeRat(rat, delta) {
-    const now = Date.now()
-
-    // Find nearest player
-    let nearestPlayer = null
-    let nearestDistance = Infinity
-
-    this.world.entities.forEach(entity => {
-      if (entity.data.type !== 'player') return
-
-      const dx = entity.data.position[0] - rat.position[0]
-      const dy = entity.data.position[1] - rat.position[1]
-      const dz = entity.data.position[2] - rat.position[2]
-      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz)
-
-      if (distance < nearestDistance) {
-        nearestDistance = distance
-        nearestPlayer = entity
-      }
-    })
-
-    if (!nearestPlayer) return
-
-    // Attack if in range and cooldown expired
-    if (nearestDistance <= rat.attackRange) {
-      if (now - rat.lastAttackTime >= rat.attackCooldown) {
-        this.applyDamage(nearestPlayer.data.id, rat.damage, rat.id)
-        rat.lastAttackTime = now
-        console.log(`[combat] 🐀 ${rat.id} attacks ${nearestPlayer.data.id}`)
-      }
-    }
   }
 
   /**
